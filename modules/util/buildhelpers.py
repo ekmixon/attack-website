@@ -19,8 +19,7 @@ from . import relationshipgetters
 def timestamp():
     """This method is here to return a timestamp"""
 
-    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-    return timestamp
+    return datetime.datetime.now().strftime("%H:%M:%S")
 
 def get_created_and_modified_dates(obj):
     """ Given an object, return the modified and created dates """
@@ -40,7 +39,7 @@ def format_date(date):
     if isinstance(date, str):
         date = datetime.datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%fZ")
 
-    return ("{} {} {}").format(date.strftime("%d"), date.strftime("%B"), date.strftime("%Y"))
+    return f'{date.strftime("%d")} {date.strftime("%B")} {date.strftime("%Y")}'
 
 def find_index_id(ext_ref):
     """This method will search for the index of the external_id in the
@@ -53,10 +52,8 @@ def find_index_id(ext_ref):
         if ext_ref[count].get("external_id") and ext_ref[count]["source_name"] in site_config.source_names:
             flag = False
         else:
-            count = count + 1
-    if flag:
-        return -1
-    return count
+            count += 1
+    return -1 if flag else count
 
 def get_attack_id(object):
     """Given an object, return attack_id"""
@@ -89,15 +86,14 @@ def update_reference_list(reference_list, obj):
                 in_list = find_in_reference_list(reference_list, ext_ref['source_name'])
 
                 if not in_list:
-                    new_ref = {}
+                    new_ref = {'description': ext_ref["description"]}
 
-                    new_ref['description'] = ext_ref["description"]
                     if ext_ref.get('url'):
                         new_ref['url'] = ext_ref['url']
                     new_ref['number'] = None
 
                     reference_list[ext_ref['source_name']] = new_ref
-    
+
     return reference_list
 
 def get_alias_data(alias_list, ext_refs):
@@ -111,18 +107,15 @@ def get_alias_data(alias_list, ext_refs):
     # Look through the list of aliases to find a match to the external 
     # references. Then, create a list of all the mapped aliases
     for alias in alias_list:
-        # Returns a list of external references that match the sourcename,
-        # we only need one though
-        found_ext_refs = [x for x in ext_refs if x["source_name"] == alias] 
-        if found_ext_refs:
+        if found_ext_refs := [
+            x for x in ext_refs if x["source_name"] == alias
+        ]:
             ext = found_ext_refs[0]
 
             if ext.get("description"):
-                row = {}
-                row['name'] = alias
-                row['descr'] = ext['description']
+                row = {'name': alias, 'descr': ext['description']}
                 alias_data.append(row)
-        
+
     return alias_data
 
 def get_subtechnique_count(technique_list_no_sub):
@@ -137,7 +130,7 @@ def get_subtechnique_count(technique_list_no_sub):
         if technique["id"] in subtechniques_of:
             subtechniques = subtechniques_of[technique["id"]]
             subtech_count += len(subtechniques)
-    
+
     return subtech_count
 
 def get_technique_table_data(tactic, techniques_list):
@@ -150,15 +143,8 @@ def get_technique_table_data(tactic, techniques_list):
 
     for tech in techniques_list:
 
-        attack_id = get_attack_id(tech)
-
-        if attack_id:
-
-            row = {}
-            row['tid'] = attack_id
-
-            row['descr'] = tech['description']
-
+        if attack_id := get_attack_id(tech):
+            row = {'tid': attack_id, 'descr': tech['description']}
             if tactic is None and tech.get('x_mitre_deprecated'):
                 row['deprecated'] = True
 
@@ -169,18 +155,16 @@ def get_technique_table_data(tactic, techniques_list):
             if tech["id"] in subtechniques_of:
                 subtechniques = subtechniques_of[tech["id"]]
                 for subtechnique in subtechniques:
-                    sub_data = {}
-                    sub_data['name'] = subtechnique['object']['name']
-                    sub_attack_id = get_attack_id(subtechnique['object'])
-                    if sub_attack_id:
-                        if not "." in sub_attack_id:
+                    sub_data = {'name': subtechnique['object']['name']}
+                    if sub_attack_id := get_attack_id(subtechnique['object']):
+                        if "." not in sub_attack_id:
                             raise Exception(f"{attack_id} subtechnique's attackID '{sub_attack_id}' is malformed")
                         sub_data['id'] = sub_attack_id.split(".")[1]
                         sub_data['descr'] = subtechnique['object']['description']
                         row['subtechniques'].append(sub_data)
 
             technique_table.append(row)
-    
+
     # Sort by technique name
     technique_table = sorted(technique_table, key=lambda k: k['technique_name'].lower())
 
@@ -240,14 +224,14 @@ def get_side_nav_domains_mobile_view_data(side_nav_title, elements_list, amount_
 
     def get_element_data(element):
         """ Given an element, return the formatted JSON """
-        
+
         return {
             "name": element['name'],
             "id": uuid.uuid4().hex,
             "path": "/{}/{}/".format(side_nav_title, attack_id),
             "children": []
         }
-    
+
     def check_children(category_list, domain_list):
         """ Given a category list, check if there is no children and update list.
             Ignore if is digits or other.
@@ -269,9 +253,9 @@ def get_side_nav_domains_mobile_view_data(side_nav_title, elements_list, amount_
                     }
                     cat['children'].append(child)
             domain_data['children'].append(cat)
-        
+
         return domain_data
-    
+
     def get_category_list():
         """ Get an empty category list """
 
@@ -284,14 +268,20 @@ def get_side_nav_domains_mobile_view_data(side_nav_title, elements_list, amount_
                 "children" : []
             }
             caterogories_content.append(pane)
-        
+
         return caterogories_content
 
     categories_map = {char: math.ceil((i+1)/amount_per_row) for i,char in enumerate(string.ascii_uppercase)}
-    categories = list(map(lambda cat: cat[0] + "-" + cat[-1], \
-                      [string.ascii_uppercase[i:i+amount_per_row] \
-                          for i in range(0, len(string.ascii_uppercase), \
-                              amount_per_row)]))
+    categories = list(
+        map(
+            lambda cat: f"{cat[0]}-{cat[-1]}",
+            [
+                string.ascii_uppercase[i : i + amount_per_row]
+                for i in range(0, len(string.ascii_uppercase), amount_per_row)
+            ],
+        )
+    )
+
     categories = ["1-9"] + categories + ["Other"]
 
     elements_data = []
@@ -312,7 +302,7 @@ def get_side_nav_domains_mobile_view_data(side_nav_title, elements_list, amount_
             for element in elements_list[domain['name']]:
                 attack_id = get_attack_id(element)
                 if attack_id:
-                        
+
                     child = get_element_data(element)
 
                     # Get first character and find in map
@@ -327,9 +317,9 @@ def get_side_nav_domains_mobile_view_data(side_nav_title, elements_list, amount_
 
                     # Add child to pane
                     caterogy_list[element_cat_index]['children'].append(child)
-            
+
             domain_data = check_children(caterogy_list, domain_data)
-            
+
             elements_data.append(domain_data)
 
     # return side menu
@@ -348,9 +338,7 @@ def get_side_menu_data(side_nav_title, path_prefix, elements_list, domain=None):
     elements_data = []
 
     for element in elements_list:
-        attack_id = get_attack_id(element)
-
-        if attack_id:
+        if attack_id := get_attack_id(element):
             row = {
                 "name": element['name'],
                 "id": element['name'],
@@ -360,7 +348,7 @@ def get_side_menu_data(side_nav_title, path_prefix, elements_list, domain=None):
             elements_data.append(row)
 
     if domain:
-        path_prefix += domain + "/"
+        path_prefix += f"{domain}/"
     # return side menu
     return {
         "name": side_nav_title,
@@ -375,10 +363,16 @@ def get_side_menu_mobile_view_data(side_nav_title, path_prefix, elements_list, a
     """
 
     categories_map = {char: math.ceil((i+1)/amount_per_row) for i,char in enumerate(string.ascii_uppercase)}
-    categories = list(map(lambda cat: cat[0] + "-" + cat[-1], \
-                      [string.ascii_uppercase[i:i+amount_per_row] \
-                          for i in range(0, len(string.ascii_uppercase), \
-                              amount_per_row)]))
+    categories = list(
+        map(
+            lambda cat: f"{cat[0]}-{cat[-1]}",
+            [
+                string.ascii_uppercase[i : i + amount_per_row]
+                for i in range(0, len(string.ascii_uppercase), amount_per_row)
+            ],
+        )
+    )
+
     categories = ["1-9"] + categories + ["Other"]
 
     mobile_side_table_data = []
@@ -394,10 +388,7 @@ def get_side_menu_mobile_view_data(side_nav_title, path_prefix, elements_list, a
         caterogories_content.append(pane)
 
     for element in elements_list:
-        # Fill rows for each category
-        attack_id = get_attack_id(element)
-
-        if attack_id:
+        if attack_id := get_attack_id(element):
             child = {
                 "name": element['name'],
                 "id": uuid.uuid4().hex,
@@ -431,16 +422,17 @@ def get_side_menu_mobile_view_data(side_nav_title, path_prefix, elements_list, a
             else:
                 # Add empty child
                 child = {
-                    "name" : "No {}".format(side_nav_title),
-                    'id' : "empty",
-                    "path" : None,
-                    "children" : []
+                    "name": f"No {side_nav_title}",
+                    'id': "empty",
+                    "path": None,
+                    "children": [],
                 }
+
                 cat['children'].append(child)
         mobile_side_table_data.append(cat)
 
     if domain:
-        path_prefix += domain + "/"
+        path_prefix += f"{domain}/"
     # return side menu
     return {
         "name": side_nav_title,
@@ -464,7 +456,7 @@ def is_sub_tid(sub_tid):
 def redirection_subtechnique(sub_tid):
     """ Convert subtechnique id to redirection format """
 
-    return get_parent_technique_id(sub_tid) + "/" + get_sub_technique_id(sub_tid)
+    return f"{get_parent_technique_id(sub_tid)}/{get_sub_technique_id(sub_tid)}"
 
 def get_parent_technique_id(sub_tid):
     """Given a sub-technique id, return parent"""
@@ -493,9 +485,7 @@ def technique_used_helper(technique_list, technique, reference_list):
         subtechniques
     """
 
-    attack_id = get_attack_id(technique['object'])
-    
-    if attack_id:
+    if attack_id := get_attack_id(technique['object']):
         # Check if technique not already in technique_list dict
         if attack_id not in technique_list:
 
@@ -512,7 +502,7 @@ def technique_used_helper(technique_list, technique, reference_list):
                 technique_list[parent_id]['subtechniques'].append(get_technique_data_helper(attack_id, technique, reference_list))
                 # Sort subtechniques by name
                 technique_list[parent_id]['subtechniques'] = sorted(technique_list[parent_id]['subtechniques'], key=lambda k: k['id'])
-            
+
             # Attack id is regular technique
             else:
                 # Add technique to list
@@ -530,7 +520,7 @@ def technique_used_helper(technique_list, technique, reference_list):
                 # Get filtered description
                 technique_list[attack_id]['descr'] = technique['relationship']['description']
                 reference_list = update_reference_list(reference_list, technique['relationship'])
-    
+
     return technique_list
 
 def get_technique_data_helper(attack_id, technique, reference_list):
@@ -538,19 +528,18 @@ def get_technique_data_helper(attack_id, technique, reference_list):
         return dictionary with technique data, include as part of technique used
     """
 
-    technique_data = {}
-
     technique_to_domain = relationshipgetters.get_technique_to_domain()
 
-    technique_data['technique_used'] = True
-
-    technique_data['domain'] = technique_to_domain[attack_id].split('-')[0]
+    technique_data = {
+        'technique_used': True,
+        'domain': technique_to_domain[attack_id].split('-')[0],
+    }
 
     if is_sub_tid(attack_id):
         technique_data['id'] = get_sub_technique_id(attack_id)
     else:
         technique_data['id'] = attack_id
-    
+
     technique_data['name'] = technique['object']['name']
 
     # Check if it has external references
@@ -558,9 +547,9 @@ def get_technique_data_helper(attack_id, technique, reference_list):
         # Get filtered description
         technique_data['descr'] = technique['relationship']['description']
         reference_list = update_reference_list(reference_list, technique['relationship'])
-    
+
     technique_data['subtechniques'] = []
-    
+
     return technique_data
 
 def parent_technique_used_helper(parent_id):
@@ -568,11 +557,9 @@ def parent_technique_used_helper(parent_id):
         parent
     """
 
-    parent_data = {}
-
     technique_to_domain = relationshipgetters.get_technique_to_domain()
 
-    parent_data['domain'] = technique_to_domain[parent_id].split('-')[0]
+    parent_data = {'domain': technique_to_domain[parent_id].split('-')[0]}
     parent_data['id'] = parent_id
     parent_data['name'] = get_technique_name(parent_id)
     parent_data['technique_used'] = False
@@ -583,10 +570,7 @@ def parent_technique_used_helper(parent_id):
 def find_in_reference_list(reference_list, source_name):
     """Check if it is already in reference list"""
 
-    if reference_list.get(source_name):
-        return True
-
-    return False
+    return bool(reference_list.get(source_name))
 
 def replace_html_chars(to_be_replaced):
     return to_be_replaced.replace("\n", "")\
@@ -612,52 +596,42 @@ def get_navigator_layers(name, attack_id, obj_type, version, techniques_used):
         mobile_layer_description += f" v{version}"
 
     # Enterprise navigator layer
-    enterprise_layer = {}
-    enterprise_layer['description'] = enterprise_layer_description
-    enterprise_layer['name'] = layer_name
-    enterprise_layer['domain'] = "enterprise-attack"
-    enterprise_layer['versions'] = {
-        "layer": "4.3",
-        "attack": major_attack_version,
-        "navigator": "4.5"
+    enterprise_layer = {
+        'description': enterprise_layer_description,
+        'name': layer_name,
+        'domain': "enterprise-attack",
+        'versions': {
+            "layer": "4.3",
+            "attack": major_attack_version,
+            "navigator": "4.5",
+        },
+        'techniques': [],
+        "gradient": {
+            "colors": ["#ffffff", "#66b1ff"],
+            "minValue": 0,
+            "maxValue": 1,
+        },
+        'legendItems': [{'label': f'used by {name}', 'color': "#66b1ff"}],
     }
-    enterprise_layer['techniques'] = []
-    enterprise_layer["gradient"] = { # white for nonused, blue for used
-		"colors": [
-			"#ffffff",
-			"#66b1ff"
-		],
-		"minValue": 0,
-		"maxValue": 1
-	}
-    enterprise_layer['legendItems'] = [{
-        'label': f'used by {name}',
-        'color': "#66b1ff"
-    }]
 
     # Mobile navigator layer
-    mobile_layer = {}
-    mobile_layer['description'] = mobile_layer_description
-    mobile_layer['name'] = layer_name
-    mobile_layer['domain'] = "mobile-attack"
-    mobile_layer['versions'] = {
-        "layer": "4.2",
-        "attack": major_attack_version,
-        "navigator": "4.3"
+    mobile_layer = {
+        'description': mobile_layer_description,
+        'name': layer_name,
+        'domain': "mobile-attack",
+        'versions': {
+            "layer": "4.2",
+            "attack": major_attack_version,
+            "navigator": "4.3",
+        },
+        'techniques': [],
+        "gradient": {
+            "colors": ["#ffffff", "#66b1ff"],
+            "minValue": 0,
+            "maxValue": 1,
+        },
+        'legendItems': [{'label': f'used by {name}', 'color': "#66b1ff"}],
     }
-    mobile_layer['techniques'] = []
-    mobile_layer["gradient"] = { # white for nonused, blue for used
-		"colors": [
-			"#ffffff",
-			"#66b1ff"
-		],
-		"minValue": 0,
-		"maxValue": 1
-	}
-    mobile_layer['legendItems'] = [{
-        'label': f'used by {name}',
-        'color': "#66b1ff"
-    }]
 
     # Append techniques to enterprise and mobile layers
     for technique in techniques_used:
@@ -666,24 +640,35 @@ def get_navigator_layers(name, attack_id, obj_type, version, techniques_used):
         # Add parent technique
         if technique.get('descr'):
             score = 1
-            if technique.get('subtechniques'):
-                navigator_technique = get_navigator_technique(technique['id'], technique["descr"] if "descr" in technique else "", score, True)
-            else:
-                navigator_technique = get_navigator_technique(technique['id'], technique["descr"] if "descr" in technique else "", score, False)
-        else:
-            if technique.get('subtechniques'):
-                navigator_technique = get_navigator_technique(technique['id'], None, None, True)
-        
+            navigator_technique = (
+                get_navigator_technique(
+                    technique['id'],
+                    technique["descr"] if "descr" in technique else "",
+                    score,
+                    True,
+                )
+                if technique.get('subtechniques')
+                else get_navigator_technique(
+                    technique['id'],
+                    technique["descr"] if "descr" in technique else "",
+                    score,
+                    False,
+                )
+            )
+
+        elif technique.get('subtechniques'):
+            navigator_technique = get_navigator_technique(technique['id'], None, None, True)
+
         if navigator_technique:
             if technique['domain'].startswith("enterprise"):
                 enterprise_layer['techniques'].append(navigator_technique)
             elif technique['domain'].startswith("mobile"):
                 mobile_layer['techniques'].append(navigator_technique) 
-        
+
         # Add subtechniques
         if technique.get('subtechniques'):
+            score = 1
             for subtechnique in technique['subtechniques']:
-                score = 1
                 navigator_technique = get_navigator_technique(technique['id']+"."+subtechnique['id'], subtechnique["descr"] if "descr" in subtechnique else "", score, True)
 
                 if technique['domain'].startswith("enterprise"):
@@ -737,9 +722,7 @@ def get_platform_path(platform):
        lower case string"""
 
     platform_split = platform.split(" ")
-    platform_str = ""
-    for part in platform_split:
-        platform_str += part
+    platform_str = "".join(platform_split)
     return platform_str.lower()
 
 def add_platform_path(platforms):
@@ -790,11 +773,13 @@ def filter_techniques_by_platform(tech_list, platforms):
         # Do not try to find if it's already on the filtered list
         if not ids_for_duplicates.get(obj['id']):
             for platform in platforms:
-                if obj.get("x_mitre_platforms"):
-                    if platform in obj["x_mitre_platforms"]:
-                        ids_for_duplicates[obj['id']] = True
-                        filtered_list.append(obj)
-                        break
+                if (
+                    obj.get("x_mitre_platforms")
+                    and platform in obj["x_mitre_platforms"]
+                ):
+                    ids_for_duplicates[obj['id']] = True
+                    filtered_list.append(obj)
+                    break
 
     return filtered_list
 
@@ -842,10 +827,7 @@ def get_subtype_data(matrix, inside, name):
     if not inside.get('subtypes'):
         inside['subtypes'] = []
 
-    subinside = {}
-    subinside['name'] = matrix['name']
-    subinside['path'] = matrix['path']
-
+    subinside = {'name': matrix['name'], 'path': matrix['path']}
     for subtype in matrix['subtypes']:
         get_subtype_data(subtype, subinside, matrix['name'])
 
@@ -879,14 +861,8 @@ def get_matrix_data(techniques):
     matrix = {}
     for technique in techniques:
         if ('revoked' not in technique or technique['revoked'] is False) and ('x_mitre_deprecated' not in technique or technique['x_mitre_deprecated'] is False):
-            # Get attack id
-            attack_id = get_attack_id(technique)
-            
-            if attack_id:
-                row = {}
-                row['attack_id'] = attack_id
-                row['name'] = technique['name']
-                        
+            if attack_id := get_attack_id(technique):
+                row = {'attack_id': attack_id, 'name': technique['name']}
                 if technique.get('kill_chain_phases'):
                     for elem in technique['kill_chain_phases']:
                         if elem['phase_name'] not in matrix:
@@ -899,9 +875,11 @@ def get_max_length(matrix, tactics):
 
     max_len = 0
     for tactic in tactics:
-        if matrix.get(tactic['x_mitre_shortname']):
-            if len(matrix[tactic['x_mitre_shortname']]) > max_len:
-                max_len = len(matrix[tactic['x_mitre_shortname']])
+        if (
+            matrix.get(tactic['x_mitre_shortname'])
+            and len(matrix[tactic['x_mitre_shortname']]) > max_len
+        ):
+            max_len = len(matrix[tactic['x_mitre_shortname']])
     return max_len
 
 def get_tactics_data(tactics):
@@ -911,14 +889,10 @@ def get_tactics_data(tactics):
 
     tactics_data = {}
     for tactic in tactics:
-        attack_id = get_attack_id(tactic)
-
-        if attack_id:
-            tactic_dict = {}
-            tactic_dict['name'] = tactic['name']
-            tactic_dict['id'] = attack_id
+        if attack_id := get_attack_id(tactic):
+            tactic_dict = {'name': tactic['name'], 'id': attack_id}
             tactics_data[tactic['x_mitre_shortname']] = tactic_dict
-    
+
     return tactics_data
 
 def generate_redirections(redirections_filename):

@@ -16,7 +16,7 @@ def generate_tactics():
 
     # Create content pages directory if does not already exist
     util.buildhelpers.create_content_pages_dir()
-    
+
     # Move templates to templates directory
     util.buildhelpers.move_templates(tactics_config.module_name, tactics_config.tactics_templates_path)
 
@@ -26,7 +26,7 @@ def generate_tactics():
 
     # Generate redirections
     util.buildhelpers.generate_redirections(tactics_config.tactics_redirection_location)
-    
+
     # To verify if a technique was generated
     tactic_generated = False
 
@@ -45,11 +45,10 @@ def generate_tactics():
     side_nav_data = util.buildhelpers.get_side_nav_domains_data("tactics", tactics)
 
     for domain in site_config.domains:
-        deprecated = True if domain['deprecated'] else False
+        deprecated = bool(domain['deprecated'])
         check_if_generated = generate_domain_markdown(domain['name'], techniques_no_sub, tactics, side_nav_data, notes, deprecated)
-        if not tactic_generated:
-            if check_if_generated:
-                tactic_generated = True
+        if not tactic_generated and check_if_generated:
+            tactic_generated = True
 
     if not tactic_generated:
         util.buildhelpers.remove_module_from_menu(tactics_config.module_name)  
@@ -85,7 +84,7 @@ def generate_domain_markdown(domain, techniques, tactics, side_nav_data, notes, 
         # Create the markdown for the enterprise groups in the STIX
         for tactic in tactics[domain]:
             generate_tactic_md(tactic, domain, tactics, techniques, side_nav_data, notes)
-        
+
         return True
 
     return False
@@ -93,75 +92,67 @@ def generate_domain_markdown(domain, techniques, tactics, side_nav_data, notes, 
 def generate_tactic_md(tactic, domain, tactic_list, techniques, side_nav_data, notes):
     """Generate markdown for given tactic"""
 
-    attack_id = util.buildhelpers.get_attack_id(tactic)
-    
-    # Add if attack id is found
-    if attack_id:
+    if not (attack_id := util.buildhelpers.get_attack_id(tactic)):
+        return
+    data = {
+        'attack_id': attack_id,
+        'name': tactic['name'],
+        'name_lower': tactic['name'].lower(),
+    }
 
-        data = {}
 
-        # Fill out data
+    data['side_menu_data'] = side_nav_data
+    data['domain'] = domain.split("-")[0]
+    data['notes'] = notes.get(tactic['id'])
 
-        data['attack_id'] = attack_id
-        data['name'] = tactic['name']
-        data['name_lower'] = tactic['name'].lower()
-        data['side_menu_data'] = side_nav_data
-        data['domain'] = domain.split("-")[0]
-        data['notes'] = notes.get(tactic['id'])
-
-        if tactic.get('x_mitre_deprecated'):
-            data['deprecated'] = True
-        else:
-            data['deprecated'] = False
-
+    data['deprecated'] = bool(tactic.get('x_mitre_deprecated'))
         # Add more detail if descriptione exists and it is not deprecated
-        if tactic.get("description") and not data['deprecated']:
-            data['descr'] = tactic['description']
+    if tactic.get("description") and not data['deprecated']:
+        data['descr'] = tactic['description']
 
-            dates = util.buildhelpers.get_created_and_modified_dates(tactic)
-            
-            if dates.get('created'):
-                data['created'] = dates['created']
+        dates = util.buildhelpers.get_created_and_modified_dates(tactic)
 
-            if dates.get('modified'):
-                data['modified'] = dates['modified']
+        if dates.get('created'):
+            data['created'] = dates['created']
 
-            # Get techniques that are in the given tactic
-            techniques_list = get_techniques_of_tactic(tactic, techniques[domain])
+        if dates.get('modified'):
+            data['modified'] = dates['modified']
 
-            data['techniques_table'] = util.buildhelpers.get_technique_table_data(tactic, techniques_list)
-            data['techniques_table_len'] = str(len(techniques_list))
+        # Get techniques that are in the given tactic
+        techniques_list = get_techniques_of_tactic(tactic, techniques[domain])
 
-            data['versioning_feature'] = site_config.check_versions_module()
-        
-        else:
-            if data['deprecated']:
-                data['descr'] = tactic.get('description')
+        data['techniques_table'] = util.buildhelpers.get_technique_table_data(tactic, techniques_list)
+        data['techniques_table_len'] = str(len(techniques_list))
 
-        subs = tactics_config.tactic_md.substitute(data)
-        subs = subs + json.dumps(data)
+        data['versioning_feature'] = site_config.check_versions_module()
 
-        with open(os.path.join(tactics_config.tactics_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
-            md_file.write(subs)
+    elif data['deprecated']:
+        data['descr'] = tactic.get('description')
+
+    subs = tactics_config.tactic_md.substitute(data)
+    subs = subs + json.dumps(data)
+
+    with open(os.path.join(tactics_config.tactics_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
+        md_file.write(subs)
 
 def get_domain_table_data(tactic_list):
     """Given a tactic list, returns an array of jsons with tactic name, id 
        and their description
     """
     tactic_table = []
-    
+
     # Set up the tactics table for a domain
     for tactic in tactic_list:
-        attack_id = util.buildhelpers.get_attack_id(tactic)
-
-        if attack_id:
+        if attack_id := util.buildhelpers.get_attack_id(tactic):
             # Create json and fill out with tactic data
-            tactic_dict = {}
-            tactic_dict['name'] = tactic['name']
-            tactic_dict['tid'] = attack_id          
-            tactic_dict['description'] = tactic['description']
+            tactic_dict = {
+                'name': tactic['name'],
+                'tid': attack_id,
+                'description': tactic['description'],
+            }
+
             tactic_table.append(tactic_dict)
-    
+
     return tactic_table
 
 def get_techniques_of_tactic(tactic, techniques):
@@ -173,9 +164,11 @@ def get_techniques_of_tactic(tactic, techniques):
 
     for technique in techniques:
         if not technique.get('x_mitre_deprecated'):
-            for phase in technique['kill_chain_phases']:
-                if phase['phase_name'] == tactic['x_mitre_shortname']:
-                    techniques_list.append(technique)
+            techniques_list.extend(
+                technique
+                for phase in technique['kill_chain_phases']
+                if phase['phase_name'] == tactic['x_mitre_shortname']
+            )
 
     techniques_list = sorted(techniques_list, key=lambda k: k['name'].lower())
     return techniques_list

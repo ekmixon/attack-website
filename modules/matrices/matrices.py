@@ -12,18 +12,18 @@ def generate_matrices():
 
     # Create content pages directory if does not already exist
     util.buildhelpers.create_content_pages_dir()
-    
+
     # Move templates to templates directory
     util.buildhelpers.move_templates(matrices_config.module_name, matrices_config.matrices_templates_path)
 
     # Verify if directory exists
     if not os.path.isdir(matrices_config.matrix_markdown_path):
         os.mkdir(matrices_config.matrix_markdown_path)
-    
+
     # Write the matrix index.html page
     with open(os.path.join(matrices_config.matrix_markdown_path, "overview.md"), "w", encoding='utf8') as md_file:
         md_file.write(matrices_config.matrix_overview_md)
-    
+
     notes = util.relationshipgetters.get_objects_using_notes()
 
     side_menu_data = util.buildhelpers.get_side_menu_matrices(matrices_config.matrices)
@@ -42,11 +42,9 @@ def generate_matrices():
     
 def generate_platform_matrices(matrix, notes, side_menu_data=None):
     """Given a matrix, generates the matrix markdown"""
-    
+
     has_data = False
-    data = {}
-    data['menu'] = side_menu_data
-    data['domain'] = matrix['matrix'].split("-")[0]
+    data = {'menu': side_menu_data, 'domain': matrix['matrix'].split("-")[0]}
     data['name'] = matrix['name']
 
     data['matrices'], data["has_subtechniques"], data["tour_technique"] = get_sub_matrices(matrix)
@@ -65,7 +63,7 @@ def generate_platform_matrices(matrix, notes, side_menu_data=None):
 
     data['versioning_feature'] = site_config.check_versions_module()
     data['resources'] = site_config.check_resources_module()
-    
+
     subs = matrices_config.matrix_md.substitute(data)
     subs = subs + json.dumps(data)
 
@@ -80,10 +78,12 @@ def generate_platform_matrices(matrix, notes, side_menu_data=None):
 def generate_deprecated_matrix(matrix, side_menu_data=None):
     """ Generate deprecated matrix md file """
 
-    data = {}
-    data['menu'] = side_menu_data
-    data['name'] = matrix['name']
-    data['domain'] = matrix['matrix'].split("-")[0]
+    data = {
+        'menu': side_menu_data,
+        'name': matrix['name'],
+        'domain': matrix['matrix'].split("-")[0],
+    }
+
     data['path'] = matrix['path']
     data['deprecated'] = True
 
@@ -109,9 +109,9 @@ def get_matrix_ids(matrices):
     matrix_ids = []
 
     for matrix in matrices:
-        if not matrix['id'] in matrix_ids:
+        if matrix['id'] not in matrix_ids:
             matrix_ids.append(matrix['id'])
-    
+
     return matrix_ids
 
 def get_sub_matrices(matrix):
@@ -129,7 +129,7 @@ def get_sub_matrices(matrix):
     # get relevant tactics
     all_tactics = util.stixhelpers.get_all_of_type(domain_ms, ["x-mitre-tactic"])
     tactic_id_to_shortname = { tactic["id"]: tactic["x_mitre_shortname"] for tactic in all_tactics }
-    
+
     has_subtechniques = False #track whether the current matrix has subtechniques
     tour_technique = { #technique used as an example in the sub-technique tour / usage explainer
         "technique": None,
@@ -141,12 +141,12 @@ def get_sub_matrices(matrix):
     def phase_names(technique):
         """get kill chain phase names from the given technique"""
         return [ phase["phase_name"] for phase in technique["kill_chain_phases"] ]
-    
+
     def transform_technique(technique, tactic_id):
         """transform a technique object into the format required by the matrix macro"""
 
         attack_id = util.buildhelpers.get_attack_id(technique)
-        
+
         obj = {}
 
         if attack_id:
@@ -186,18 +186,18 @@ def get_sub_matrices(matrix):
         """helper function mapping a tactic_id
            to a structured tactic object including the (filtered) techniques 
            in the tactic"""
-                
+
         # filter platform techniques to those inside of this tactic
         techniques = list(filter(lambda technique: tactic_id_to_shortname[tactic_id] in phase_names(technique), platform_techniques))
         # transform into format required by matrix macro
         return list(map(lambda t: transform_technique(t, tactic_id), techniques))
-    
+
     def transform_tactic(tactic_id):
         """transform a tactic object into the format required by the matrix macro"""
         tactic_obj = list(filter(lambda t: t["id"] == tactic_id, all_tactics))[0]
 
         attack_id = util.buildhelpers.get_attack_id(tactic_obj)
-        
+
         obj = {
             'techniques': []
         }
@@ -207,9 +207,9 @@ def get_sub_matrices(matrix):
             obj['name'] = tactic_obj["name"]
             obj['external_id'] = attack_id
 
-            obj['url'] = "/tactics/" + attack_id
+            obj['url'] = f"/tactics/{attack_id}"
             obj['techniques'] = techniques_in_tactic(tactic_id)
-        
+
         return obj
 
     data = []
@@ -229,5 +229,5 @@ def get_sub_matrices(matrix):
             "description": sub_matrix["description"],
             "tactics": tactics,
         })
-        
+
     return data, has_subtechniques, tour_technique

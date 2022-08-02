@@ -55,9 +55,7 @@ def generate_index():
 
 skiplines = ["breadcrumb-item", "nav-link"]
 def skipline(line):
-    for skip in skiplines:
-        if skip in line: return True
-    return False
+    return any(skip in line for skip in skiplines)
 
 def clean_line(line):
     """clean unicode spaces from line"""
@@ -71,10 +69,8 @@ def clean_line(line):
 
 def clean(filepath):
     """clean the file of all HTML tags and unnecessary data"""
-    f = open(filepath, mode="r", encoding="utf8")
-    lines = f.readlines()
-    f.close()
-
+    with open(filepath, mode="r", encoding="utf8") as f:
+        lines = f.readlines()
     content = ""
     title = ""
     skipindex = False
@@ -87,9 +83,8 @@ def clean(filepath):
         if "<!--stop-indexing-for-search-->" in line: 
             indexing = False
         if "<title>" in line:
-            # e.g [Credential Access - Enterprise | MITRE ATT&CK&trade;] becomes [Credential Access - Enterprise]
-            match = re.search(r"<title>(.*)\|.*</title>", line)
-            if match: title = match.group(1).strip()
+            if match := re.search(r"<title>(.*)\|.*</title>", line):
+                title = match[1].strip()
         if 'http-equiv="refresh"' in line: skipindex = True
 
     out = bleach.clean(content, tags=[], strip=True) #remove tags

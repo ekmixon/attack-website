@@ -16,21 +16,21 @@ def generate_techniques():
 
     # Create content pages directory if does not already exist
     util.buildhelpers.create_content_pages_dir()
-    
+
     # Move templates to templates directory
     util.buildhelpers.move_templates(techniques_config.module_name, techniques_config.techniques_templates_path)
 
     # Verify if directory exists
     if not os.path.isdir(techniques_config.techniques_markdown_path):
         os.mkdir(techniques_config.techniques_markdown_path)
-    
+
     # Generate redirections
     util.buildhelpers.generate_redirections(techniques_config.techniques_redirection_location)
 
     #Write the technique index.html page
     with open(os.path.join(techniques_config.techniques_markdown_path, "overview.md"), "w", encoding='utf8') as md_file:
         md_file.write(techniques_config.technique_overview_md)
-    
+
     # To verify if a technique was generated
     technique_generated = False
 
@@ -49,12 +49,11 @@ def generate_techniques():
     side_nav_data = get_technique_side_nav_data(techniques_no_sub, tactics)
 
     for domain in site_config.domains:
-        deprecated = True if domain['deprecated'] else False
+        deprecated = bool(domain['deprecated'])
         check_if_generated = generate_domain_markdown(domain['name'], techniques_no_sub, tactics, side_nav_data, notes, deprecated)
-        if not technique_generated:
-            if check_if_generated:
-                technique_generated = True
-    
+        if not technique_generated and check_if_generated:
+            technique_generated = True
+
     if not technique_generated:
         util.buildhelpers.remove_module_from_menu(techniques_config.module_name)   
 
@@ -64,98 +63,88 @@ def generate_domain_markdown(domain, techniques_no_sub, tactics, side_nav_data, 
     """
 
     # Check if there is at least one technique
-    if techniques_no_sub[domain]:
+    if not techniques_no_sub[domain]:
+        return False
+    techhnique_list_no_sub_no_deprecated = util.buildhelpers.filter_deprecated_revoked(techniques_no_sub[domain])
 
-        techhnique_list_no_sub_no_deprecated = util.buildhelpers.filter_deprecated_revoked(techniques_no_sub[domain])
+    data = {'domain': domain.split("-")[0]}
 
-        data = {}
+    # Get technique table data and number of techniques
+    data['technique_table'] = util.buildhelpers.get_technique_table_data(None, techhnique_list_no_sub_no_deprecated)
+    data['technique_list_len'] = str(len(techhnique_list_no_sub_no_deprecated))
+    data['subtechniques_len'] = util.buildhelpers.get_subtechnique_count(techhnique_list_no_sub_no_deprecated)
 
-        data['domain'] = domain.split("-")[0]
+    # Get tactic-techniques table
+    data['menu'] = side_nav_data
 
-        # Get technique table data and number of techniques
-        data['technique_table'] = util.buildhelpers.get_technique_table_data(None, techhnique_list_no_sub_no_deprecated)
-        data['technique_list_len'] = str(len(techhnique_list_no_sub_no_deprecated))
-        data['subtechniques_len'] = util.buildhelpers.get_subtechnique_count(techhnique_list_no_sub_no_deprecated)
+    if deprecated:
+        data['deprecated'] = deprecated
 
-        # Get tactic-techniques table
-        data['menu'] = side_nav_data
+    subs = techniques_config.technique_domain_md.substitute(data)
+    subs = subs + json.dumps(data)
 
-        if deprecated:
-            data['deprecated'] = deprecated
+    with open(os.path.join(techniques_config.techniques_markdown_path, data['domain'] + "-techniques.md"), "w", encoding='utf8') as md_file:
+        md_file.write(subs)
 
-        subs = techniques_config.technique_domain_md.substitute(data)
-        subs = subs + json.dumps(data)
+    # Create the markdown for techniques in the STIX
+    for technique in techniques_no_sub[domain]:
+        if 'revoked' not in technique or technique['revoked'] is False:
+            generate_technique_md(technique, domain, side_nav_data, tactics[domain], notes)
 
-        with open(os.path.join(techniques_config.techniques_markdown_path, data['domain'] + "-techniques.md"), "w", encoding='utf8') as md_file:
-            md_file.write(subs)
-
-        # Create the markdown for techniques in the STIX
-        for technique in techniques_no_sub[domain]:
-            if 'revoked' not in technique or technique['revoked'] is False:
-                generate_technique_md(technique, domain, side_nav_data, tactics[domain], notes)
-        
-        return True
-    
-    return False
+    return True
 
 def generate_technique_md(technique, domain, side_nav_data, tactic_list, notes):
     """Generetes markdown data for given technique"""
 
-    attack_id = util.buildhelpers.get_attack_id(technique)
+    if not (attack_id := util.buildhelpers.get_attack_id(technique)):
+        return
+    subtechniques_of = util.relationshipgetters.get_subtechniques_of()
 
-    # Only add technique if the attack id was found
-    if attack_id:
+    technique_dict = {'attack_id': attack_id, 'domain': domain.split("-")[0]}
 
-        subtechniques_of = util.relationshipgetters.get_subtechniques_of()
+    technique_dict['menu'] = side_nav_data
+    technique_dict['name'] = technique.get('name')
+    technique_dict['notes'] = notes.get(technique['id'])
 
-        technique_dict = {}
+    # Get subtechniques
+    technique_dict['subtechniques'] = get_subtechniques(technique)
 
-        technique_dict['attack_id'] = attack_id
-        technique_dict['domain'] = domain.split("-")[0]
-        technique_dict['menu'] = side_nav_data
-        technique_dict['name'] = technique.get('name')
-        technique_dict['notes'] = notes.get(technique['id'])
+    # Generate data for technique
+    technique_dict = generate_data_for_md(technique_dict, technique, tactic_list)
 
-        # Get subtechniques
-        technique_dict['subtechniques'] = get_subtechniques(technique)
+    subs = techniques_config.technique_md.substitute(technique_dict)
+    path = technique_dict['attack_id']
 
-        # Generate data for technique
-        technique_dict = generate_data_for_md(technique_dict, technique, tactic_list)
-
-        subs = techniques_config.technique_md.substitute(technique_dict)
-        path = technique_dict['attack_id']
-
-        subs = subs + json.dumps(technique_dict)
+    subs = subs + json.dumps(technique_dict)
 
         #Write out the technique markdown file
-        with open(os.path.join(techniques_config.techniques_markdown_path, path + ".md"), "w", encoding='utf8') as md_file:
-            md_file.write(subs)
+    with open(os.path.join(techniques_config.techniques_markdown_path, f"{path}.md"), "w", encoding='utf8') as md_file:
+        md_file.write(subs)
 
         # Generate data for sub-techniques
-        if technique_dict['subtechniques']:
+    if technique_dict['subtechniques']:
 
-            # Generate sub-technique markdown file for each sub technique
-            subtechniques = subtechniques_of[technique["id"]]
-            for subtechnique in subtechniques:
-                sub_tech_dict = {}
+        # Generate sub-technique markdown file for each sub technique
+        subtechniques = subtechniques_of[technique["id"]]
+        for subtechnique in subtechniques:
+            sub_tech_dict = {'domain': domain.split("-")[0]}
 
-                sub_tech_dict['domain'] = domain.split("-")[0]
-                sub_tech_dict['menu'] = side_nav_data
-                sub_tech_dict['parent_id'] = technique_dict['attack_id']
-                sub_tech_dict['parent_name'] = technique.get('name')
-                sub_tech_dict['subtechniques'] = technique_dict['subtechniques']
+            sub_tech_dict['menu'] = side_nav_data
+            sub_tech_dict['parent_id'] = technique_dict['attack_id']
+            sub_tech_dict['parent_name'] = technique.get('name')
+            sub_tech_dict['subtechniques'] = technique_dict['subtechniques']
 
-                sub_tech_dict = generate_data_for_md(sub_tech_dict, subtechnique['object'], tactic_list, True)
+            sub_tech_dict = generate_data_for_md(sub_tech_dict, subtechnique['object'], tactic_list, True)
 
-                if sub_tech_dict.get('sub_number'):
-                    subs = techniques_config.sub_technique_md.substitute(sub_tech_dict)
-                    path = sub_tech_dict['parent_id'] + "-" + sub_tech_dict['sub_number']
+            if sub_tech_dict.get('sub_number'):
+                subs = techniques_config.sub_technique_md.substitute(sub_tech_dict)
+                path = sub_tech_dict['parent_id'] + "-" + sub_tech_dict['sub_number']
 
-                    subs = subs + json.dumps(sub_tech_dict)
+                subs = subs + json.dumps(sub_tech_dict)
 
                     #Write out the technique markdown file
-                    with open(os.path.join(techniques_config.techniques_markdown_path, path + ".md"), "w", encoding='utf8') as md_file:
-                        md_file.write(subs)
+                with open(os.path.join(techniques_config.techniques_markdown_path, f"{path}.md"), "w", encoding='utf8') as md_file:
+                    md_file.write(subs)
         
 
 def generate_data_for_md(technique_dict, technique, tactic_list, is_sub_technique = False):
@@ -196,31 +185,27 @@ def generate_data_for_md(technique_dict, technique, tactic_list, is_sub_techniqu
 
         # Get initial reference list
         reference_list = {'current_number': 0}
-        
+
         # Get initial reference list from technique object
         reference_list = util.buildhelpers.update_reference_list(reference_list, technique)
 
         dates = util.buildhelpers.get_created_and_modified_dates(technique)
-        
+
         if dates.get('created'):
             technique_dict['created'] = dates['created']
 
         if dates.get('modified'):
             technique_dict['modified'] = dates['modified']
-        
-        if technique.get('x_mitre_deprecated'):
-            technique_dict['deprecated'] = True
-        else:
-            technique_dict['deprecated'] = False
 
+        technique_dict['deprecated'] = bool(technique.get('x_mitre_deprecated'))
         # Get technique description with citations
         if technique.get("description") and not technique_dict['deprecated']:
 
             technique_dict['descr'] = technique['description']
-        
+
             # Get mitigation table
             technique_dict['mitigation_table'] = get_mitigations_table_data(technique, reference_list)
-            
+
             # Get related techniques
             technique_dict['rel_techniques_table'] = get_related_techniques_data(technique, tactic_list)
 
@@ -269,10 +254,9 @@ def generate_data_for_md(technique_dict, technique, tactic_list, is_sub_techniqu
 
             # Get if technique supports remote
             if technique.get('x_mitre_remote_support'):
-                if technique['x_mitre_remote_support']:
-                    technique_dict['supports_remote'] = " Yes"
-                else:
-                    technique_dict['supports_remote'] = " No"
+                technique_dict['supports_remote'] = (
+                    " Yes" if technique['x_mitre_remote_support'] else " No"
+                )
 
             # Get network requirements
             if technique.get('x_mitre_network_requirements'):
@@ -320,14 +304,13 @@ def generate_data_for_md(technique_dict, technique, tactic_list, is_sub_techniqu
             # Get explanation of difficulty for adversaries
             if technique.get('x_mitre_difficulty_for_adversary_explanation'):
                 technique_dict['diff_for_adv_exp'] = util.buildhelpers.replace_html_chars(technique['x_mitre_difficulty_for_adversary_explanation'])            
-            
+
             technique_dict['citations'] = reference_list
 
             technique_dict['versioning_feature'] = site_config.check_versions_module()
-        
-        else:
-            if technique_dict['deprecated']:
-                technique_dict['descr'] = technique.get('description')
+
+        elif technique_dict['deprecated']:
+            technique_dict['descr'] = technique.get('description')
 
     return technique_dict
 
@@ -336,23 +319,25 @@ def get_related_techniques_data(technique, tactic_list):
        Data includes technique id/name and tactic name/id for each related
        technique
     """
-    
+
     technique_data = []
 
     if util.relationshipgetters.get_technique_related_to_technique().get(technique['id']):
         for rel_tech in util.relationshipgetters.get_technique_related_to_technique()[technique['id']]:
 
-            attack_id = util.buildhelpers.get_attack_id(rel_tech['object'])
-
-            if attack_id:
-                row = {}
-                row['technique_id'] = attack_id
-
-                tactic = [x for x in tactic_list if x['x_mitre_shortname'] == rel_tech['object']['kill_chain_phases'][0]['phase_name']][0]
-                if tactic:
+            if attack_id := util.buildhelpers.get_attack_id(
+                rel_tech['object']
+            ):
+                row = {'technique_id': attack_id}
+                if tactic := [
+                    x
+                    for x in tactic_list
+                    if x['x_mitre_shortname']
+                    == rel_tech['object']['kill_chain_phases'][0]['phase_name']
+                ][0]:
                     row['tactic_id'] = util.buildhelpers.get_attack_id(tactic)
                 row['tactic_name'] = rel_tech['object']['kill_chain_phases'][0]['phase_name'].title().replace('-', ' ')
-                
+
                 row['technique_name'] = rel_tech['object']['name']
                 technique_data.append(row)
 
@@ -376,21 +361,17 @@ def get_mitigations_table_data(technique, reference_list):
             # Do not add deprecated mitigation to table
             if 'x_mitre_deprecated' not in mitigation['object']:
 
-                attack_id = util.buildhelpers.get_attack_id(mitigation['object'])
-
-                # Only add if mitigation attack id is found 
-                if attack_id:
-
-                    row = {}
-                    row['mid'] = attack_id
-                    row['name'] = mitigation['object']['name']
+                if attack_id := util.buildhelpers.get_attack_id(
+                    mitigation['object']
+                ):
+                    row = {'mid': attack_id, 'name': mitigation['object']['name']}
                     if mitigation['relationship'].get('description'):
                         # Get filtered description
                         reference_list = util.buildhelpers.update_reference_list(reference_list, mitigation['relationship'])
                         row['descr'] = mitigation['relationship']['description']
-             
+
                     mitigation_data.append(row)
-    
+
     if mitigation_data:
         mitigation_data = sorted(mitigation_data, key=lambda k: k['name'].lower())
     return mitigation_data
@@ -415,18 +396,16 @@ def get_examples_table_data(technique, reference_list):
         if examples['example_type'].get(technique.get('id')):
             for example in examples['example_type'][technique['id']]:
 
-                attack_id = util.buildhelpers.get_attack_id(example['object'])
+                if attack_id := util.buildhelpers.get_attack_id(
+                    example['object']
+                ):
+                    row = {
+                        'id': attack_id,
+                        'path': "software"
+                        if attack_id.startswith('S')
+                        else "groups",
+                    }
 
-                # Only add example data if the attack id is found    
-                if attack_id:
-                    row = {}
-
-                    row['id'] = attack_id
-
-                    if attack_id.startswith('S'):
-                        row['path'] = "software"
-                    else:
-                        row['path'] = "groups"
 
                     row['name'] = example['object']['name']
 
@@ -436,7 +415,7 @@ def get_examples_table_data(technique, reference_list):
                         row['descr'] = example['relationship']['description']
 
                     example_data.append(row)
-        
+
     if example_data:
         example_data = sorted(example_data, key=lambda k: k['name'].lower())
     return example_data

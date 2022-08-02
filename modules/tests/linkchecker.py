@@ -78,7 +78,7 @@ def get_correct_link(path):
 
     # All paths need to start with /
     if not path.startswith("/"):
-        path = "/" + path
+        path = f"/{path}"
 
     # Check if path is directory
     extensions = [".html", ".css", ".htm", ".gif", ".jpg", ".png", ".js", ".json", ".ico", ".jpeg", ".svg", ".pdf", ".xlsx", ".docx", ".rtf"]
@@ -99,7 +99,7 @@ def get_correct_link(path):
     # ditto for js
     if re.search("\.js\?[\w\d]+", path):
         path = path.split("?")[0] # remove suffix
-    
+
     return path
 
 def check_if_link_in_use(filepath, link):
@@ -109,15 +109,18 @@ def check_if_link_in_use(filepath, link):
        in use links map
     """
 
-    if not "previous" in link and not "versions" in link:
-        if not in_use_links.get(link):
-            new_file_name = remove_extra_from_path(filepath)
+    if (
+        "previous" not in link
+        and "versions" not in link
+        and not in_use_links.get(link)
+    ):
+        new_file_name = remove_extra_from_path(filepath)
 
-            if new_file_name.startswith("\\"):
-                new_file_name = new_file_name.replace("\\", "/")
+        if new_file_name.startswith("\\"):
+            new_file_name = new_file_name.replace("\\", "/")
 
-            if new_file_name != link:
-                in_use_links[link] = True
+        if new_file_name != link:
+            in_use_links[link] = True
 
 def remove_subdirectory_from_web_directory():
 
@@ -139,26 +142,24 @@ def internal_link_test(link):
     to_index_path = path
     if path.endswith(".html") and not path.endswith("index.html"):
         to_index_path = path.split(".html")
-        to_index_path = to_index_path[0] + "/" + "index.html"
-    
+        to_index_path = f"{to_index_path[0]}/index.html"
+
     # e.g: contacts/index.html -> contacts.html
     from_index_path = path
     if path.endswith("/index.html"):
         from_index_path = path.split("/index.html")
-        from_index_path = from_index_path[0] + ".html"
+        from_index_path = f"{from_index_path[0]}.html"
 
-    if os.path.exists(path) or os.path.exists(to_index_path) or os.path.exists(from_index_path):
-        return False
-    else:
-        return True
+    return (
+        not os.path.exists(path)
+        and not os.path.exists(to_index_path)
+        and not os.path.exists(from_index_path)
+    )
 
 def check_if_relative_link(link):
     """Given a link, return true if it is a relative path"""
 
-    if not link.startswith("http"):
-        if not link.startswith("/"):
-            return True
-    return False
+    return not link.startswith("http") and not link.startswith("/")
     
 def internal_external_link_checker(filepath, html_str):
     """Check internal and external links"""
@@ -169,7 +170,7 @@ def internal_external_link_checker(filepath, html_str):
     # Array to store problems found
     problems = []
     relative_links = []
-    
+
     # find all links
     for prefix in ["href", "src"]:
         # Regular expression includes http: and https:
@@ -182,12 +183,8 @@ def internal_external_link_checker(filepath, html_str):
         # check if link has a dest
         for link in links:
 
-            # Check if link is relative path
-            is_relative = check_if_relative_link(link)
-
-            # Add to relative links list if relative
-            if is_relative:
-                if not link in relative_links:
+            if is_relative := check_if_relative_link(link):
+                if link not in relative_links:
                     relative_links.append(link)
 
             # Get correct path
@@ -197,9 +194,8 @@ def internal_external_link_checker(filepath, html_str):
 
             if link in links_list:
                 # If problem detected, add to problem list
-                if links_list[link]:
-                    if link not in problems:
-                        problems.append(f"[{links_list[link]}] {link}")
+                if links_list[link] and link not in problems:
+                    problems.append(f"[{links_list[link]}] {link}")
             elif link.startswith("http"):
                 # Consider status 404 and unreachable as broken.
                 # Unreachable will be triggered by the except clause
@@ -207,23 +203,22 @@ def internal_external_link_checker(filepath, html_str):
                     r = requests.head(
                         link, headers=headers, 
                         verify=False, timeout=5)
-                    if r.status_code != 200:
+                    if r.status_code == 200:
+                        links_list[link] = None
+                    else:
                         links_list[link] = r.status_code
                         problems.append(f"[{r.status_code}] {link}")
-                    else:
-                        links_list[link] = None
                 except Exception as ex:
                     links_list[link] = f"external link {type(ex).__name__}"
                     problems.append(f"[external link {type(ex).__name__}] {link}")
-            else:
-                if internal_link_test(link):
-                    problems.append(f"[internal page missing] {link}")
-                    links_list[link] = "internal page missing"
+            elif internal_link_test(link):
+                problems.append(f"[internal page missing] {link}")
+                links_list[link] = "internal page missing"
 
-                    if not internal_link_error:
-                        internal_link_error = True
-                else:
-                    links_list[link] = None
+                if not internal_link_error:
+                    internal_link_error = True
+            else:
+                links_list[link] = None
 
     return problems, relative_links, internal_link_error
 
@@ -248,12 +243,8 @@ def internal_link_checker(filepath, html_str):
         # check if link has a dest
         for link in links:
 
-            # Check if link is relative path
-            is_relative = check_if_relative_link(link)
-
-            # Add to relative links list if relative
-            if is_relative:
-                if not link in relative_links:
+            if is_relative := check_if_relative_link(link):
+                if link not in relative_links:
                     relative_links.append(link)
 
             # Get correct path
@@ -263,18 +254,16 @@ def internal_link_checker(filepath, html_str):
             check_if_link_in_use(filepath, link)
 
             if link in links_list:
-                if links_list[link]:
-                    if link not in problems:
-                        problems.append(f"[{links_list[link]}] {link}")
-            else:
-                if internal_link_test(link):
-                    problems.append(f"[internal page missing] {link}")
-                    links_list[link] = "internal page missing"
+                if links_list[link] and link not in problems:
+                    problems.append(f"[{links_list[link]}] {link}")
+            elif internal_link_test(link):
+                problems.append(f"[internal page missing] {link}")
+                links_list[link] = "internal page missing"
 
-                    if not internal_link_error:
-                        internal_link_error = True
-                else:
-                    links_list[link] = None
+                if not internal_link_error:
+                    internal_link_error = True
+            else:
+                links_list[link] = None
 
     return problems, relative_links, internal_link_error
 
@@ -299,7 +288,7 @@ def check_unlinked_pages(filenames):
 
     unlinked_pages = []
     for filename in filenames:
-        if not "previous" in filename and not "versions" in filename:
+        if "previous" not in filename and "versions" not in filename:
 
             # Check if it is deprecated
             if check_if_file_is_deprecated(filename):
@@ -307,7 +296,7 @@ def check_unlinked_pages(filenames):
 
             # Remove unused filepath from filename
             filename = remove_extra_from_path(filename)
-            
+
             if filename.startswith("\\"):
                 filename = filename.replace("\\", "/")
 
@@ -319,13 +308,13 @@ def check_unlinked_pages(filenames):
             to_index_path = filename
             if filename.endswith(".html") and not filename.endswith("index.html"):
                 to_index_path = filename.split(".html")
-                to_index_path = to_index_path[0] + "/" + "index.html"
-            
+                to_index_path = f"{to_index_path[0]}/index.html"
+
             # e.g: contacts/index.html -> contacts.html
             from_index_path = filename
             if filename.endswith("/index.html"):
                 from_index_path = filename.split("/index.html")
-                from_index_path = from_index_path[0] + ".html"
+                from_index_path = f"{from_index_path[0]}.html"
 
             if not in_use_links.get(filename) and not in_use_links.get(to_index_path) and not in_use_links.get(from_index_path):
                 unlinked_pages.append(filename)
@@ -343,22 +332,24 @@ def check_links_on_page(filepath, check_external_links=False):
     with open(filepath, mode="r", encoding='utf8') as html:
         html_str = html.read()
 
-        if not "previous" in filepath and not "versions" in filepath:
-            # Add redirects to in-use to avoid false positives
-            if html_str.startswith("<meta http-equiv=\"refresh\""):
-                corrected_path = remove_extra_from_path(filepath)
+        if (
+            "previous" not in filepath
+            and "versions" not in filepath
+            and html_str.startswith("<meta http-equiv=\"refresh\"")
+        ):
+            corrected_path = remove_extra_from_path(filepath)
 
-                if corrected_path.startswith("\\"):
-                    corrected_path = corrected_path.replace("\\", "/")
+            if corrected_path.startswith("\\"):
+                corrected_path = corrected_path.replace("\\", "/")
 
-                if not in_use_links.get(corrected_path):
-                    in_use_links[corrected_path] = True
+            if not in_use_links.get(corrected_path):
+                in_use_links[corrected_path] = True
 
         if check_external_links:
             problems, relative_links, internal_problem = internal_external_link_checker(filepath, html_str)
         else:
             problems, relative_links, internal_problem = internal_link_checker(filepath, html_str)
-        
+
     filepath = remove_extra_from_path(filepath)
     return {"path": filepath, "problems": problems, 
             "relative_links": relative_links, "internal_problem": internal_problem}
@@ -366,12 +357,8 @@ def check_links_on_page(filepath, check_external_links=False):
 
 def get_amount_of_broken_links():
     """Return the number of broken links"""
-    
-    count = 0
-    for link in links_list:
-        if links_list[link]:
-            count += 1
-    return count
+
+    return sum(bool(links_list[link]) for link in links_list)
 
 def check_links(external_links = False):
     """checks all links on the site to make sure that they have a valid 
@@ -384,16 +371,20 @@ def check_links(external_links = False):
     filenames = []
 
     internal_problem = False
-    
+
     for directory, _, files in os.walk(site_config.web_directory):
         for filename in filter(lambda f: f.endswith(".html"), files):
-                   
+               
             filepath = os.path.join(directory, filename)
 
             filenames.append(filepath)
 
             # Do not check previous dir with external links
-            if external_links and not 'previous' in directory and not 'versions' in directory:
+            if (
+                external_links
+                and 'previous' not in directory
+                and 'versions' not in directory
+            ):
                 report = check_links_on_page(filepath, True)
             else:
                 report = check_links_on_page(filepath)
@@ -401,17 +392,18 @@ def check_links(external_links = False):
             # Set internal problem flag to true if internal
             # problem is found. We want to exit out on error if an internal
             # link is broken
-            if not internal_problem:
-                if report.get("internal_problem"):
-                    internal_problem = True
+            if not internal_problem and report.get("internal_problem"):
+                internal_problem = True
 
             if report.get("problems"):
                 broken_pages.append(report)
 
             if report.get("relative_links"):
-                relative_links_report = {}
-                relative_links_report['path'] = report["path"]
-                relative_links_report['relative_links'] = report["relative_links"]
+                relative_links_report = {
+                    'path': report["path"],
+                    'relative_links': report["relative_links"],
+                }
+
                 relative_links.append(relative_links_report)
 
     # Get unlinked pages list
@@ -457,12 +449,12 @@ def check_links(external_links = False):
     links = (len(links_list) - broken_count, broken_count)              
 
     exit_codes = []
-    
-    # Add exit codes depending on problems found
-    if broken_count and internal_problem:
-        exit_codes.append(tests_config.BROKEN_LINKS)
-    elif broken_count:
-        exit_codes.append(tests_config.BROKEN_EXTERNAL_LINKS)
+
+    if broken_count:
+        if internal_problem:
+            exit_codes.append(tests_config.BROKEN_LINKS)
+        else:
+            exit_codes.append(tests_config.BROKEN_EXTERNAL_LINKS)
     if unlinked_pages:
         exit_codes.append(tests_config.UNLINKED_PAGES)
     if relative_links:

@@ -37,30 +37,23 @@ def generate_markdown_files():
        all datasources
     """
 
-    has_datasource = False
-
     datasource_list = rsg.get_datasource_list()
     datasource_list_no_deprecated_revoked = util.buildhelpers.filter_deprecated_revoked(datasource_list)
 
-    if datasource_list_no_deprecated_revoked:
-        has_datasource = True
-
+    has_datasource = bool(datasource_list_no_deprecated_revoked)
     if has_datasource:
-        data = {}
-
         # Amount of characters per category
         group_by = 2
 
         notes = rsg.get_objects_using_notes()
         side_menu_data = get_datasources_side_nav_data(datasource_list_no_deprecated_revoked)
-        data['side_menu_data'] = side_menu_data
-
+        data = {'side_menu_data': side_menu_data}
         side_menu_mobile_view_data = util.buildhelpers.get_side_menu_mobile_view_data(datasources_config.module_name, "/datasources/", datasource_list_no_deprecated_revoked, group_by)
         data['side_menu_mobile_view_data'] = side_menu_mobile_view_data
 
         data['datasources_table'] = get_datasources_table_data(datasource_list_no_deprecated_revoked)
         data['datasources_list_len'] = str(len(datasource_list_no_deprecated_revoked))
-        
+
         subs = datasources_config.datasource_index_md + json.dumps(data)
 
         with open(os.path.join(datasources_config.datasource_markdown_path, "overview.md"), "w", encoding='utf8') as md_file:
@@ -69,79 +62,78 @@ def generate_markdown_files():
         #Create the markdown for the enterprise datasources in the STIX
         for datasource in datasource_list:
             generate_datasource_md(datasource, side_menu_data, side_menu_mobile_view_data, notes)
-    
+
     return has_datasource
 
 def generate_datasource_md(datasource, side_menu_data, side_menu_mobile_view_data, notes):
     """Responsible for generating markdown of all datasources"""
 
-    attack_id = util.buildhelpers.get_attack_id(datasource)
+    if not (attack_id := util.buildhelpers.get_attack_id(datasource)):
+        return
+    data = {
+        'attack_id': attack_id,
+        'side_menu_data': side_menu_data,
+        'side_menu_mobile_view_data': side_menu_mobile_view_data,
+        'notes': notes.get(datasource['id']),
+    }
 
-    if attack_id:
-        data = {}
 
-        data['attack_id'] = attack_id
+    # Get initial reference list
+    reference_list = {'current_number': 0}
 
-        data['side_menu_data'] = side_menu_data
-        data['side_menu_mobile_view_data'] = side_menu_mobile_view_data
-        data['notes'] = notes.get(datasource['id'])
+    # Get initial reference list from group object
+    reference_list = util.buildhelpers.update_reference_list(reference_list, datasource)
 
-        # Get initial reference list
-        reference_list = {'current_number': 0}
+    dates = util.buildhelpers.get_created_and_modified_dates(datasource)
 
-        # Get initial reference list from group object
-        reference_list = util.buildhelpers.update_reference_list(reference_list, datasource)
-        
-        dates = util.buildhelpers.get_created_and_modified_dates(datasource)
-        
-        if dates.get('created'):
-            data['created'] = dates['created']
+    if dates.get('created'):
+        data['created'] = dates['created']
 
-        if dates.get('modified'):
-            data['modified'] = dates['modified']
+    if dates.get('modified'):
+        data['modified'] = dates['modified']
 
-        if datasource.get("name"):
-            data['name'] = datasource['name']
-        
-        if datasource.get("x_mitre_version"):
-            data['version'] = datasource["x_mitre_version"]
+    if datasource.get("name"):
+        data['name'] = datasource['name']
 
-        if isinstance(datasource.get("x_mitre_contributors"),collections.Iterable):
-            data['contributors_list'] = datasource["x_mitre_contributors"]
+    if datasource.get("x_mitre_version"):
+        data['version'] = datasource["x_mitre_version"]
 
-        if datasource.get("description"):
-            data['descr'] = datasource['description']
+    if isinstance(datasource.get("x_mitre_contributors"),collections.Iterable):
+        data['contributors_list'] = datasource["x_mitre_contributors"]
 
-        if datasource.get("x_mitre_platforms"):
-            datasource['x_mitre_platforms'].sort()
-            data['platforms'] = ", ".join(datasource['x_mitre_platforms'])
-        
-        if datasource.get("x_mitre_collection_layers"):
-            datasource['x_mitre_collection_layers'].sort()
-            data['collection_layers'] = ", ".join(datasource['x_mitre_collection_layers'])
+    if datasource.get("description"):
+        data['descr'] = datasource['description']
 
-        # Get data components of data source and the technique relationships
-        data['datacomponents_list'] = get_datacomponents_data(datasource, reference_list)
+    if datasource.get("x_mitre_platforms"):
+        datasource['x_mitre_platforms'].sort()
+        data['platforms'] = ", ".join(datasource['x_mitre_platforms'])
 
-        data['citations'] = reference_list
+    if datasource.get("x_mitre_collection_layers"):
+        datasource['x_mitre_collection_layers'].sort()
+        data['collection_layers'] = ", ".join(datasource['x_mitre_collection_layers'])
 
-        if datasource.get('x_mitre_deprecated'):
-            data['deprecated'] = True
-        
-        data['versioning_feature'] = site_config.check_versions_module()
+    # Get data components of data source and the technique relationships
+    data['datacomponents_list'] = get_datacomponents_data(datasource, reference_list)
 
-        datasource_data_md = datasources_config.datasource_md.substitute(data)
-        datasource_data_md = datasource_data_md + json.dumps(data)
+    data['citations'] = reference_list
 
-        # Write out the markdown file
-        with open(os.path.join(datasources_config.datasource_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
-            md_file.write(datasource_data_md)
+    if datasource.get('x_mitre_deprecated'):
+        data['deprecated'] = True
+
+    data['versioning_feature'] = site_config.check_versions_module()
+
+    datasource_data_md = datasources_config.datasource_md.substitute(data)
+    datasource_data_md = datasource_data_md + json.dumps(data)
+
+    # Write out the markdown file
+    with open(os.path.join(datasources_config.datasource_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
+        md_file.write(datasource_data_md)
 
 def get_datasources_side_nav_data(datasources):
     """Responsible for generating the links that are located on the
        left side of individual data sources domain pages
     """
-    
+
     side_nav_data = []
 
     # Get data components of data source
@@ -149,16 +141,14 @@ def get_datasources_side_nav_data(datasources):
 
     for datasource in datasources:
 
-        attack_id = util.buildhelpers.get_attack_id(datasource)
-
-        if attack_id:
-
+        if attack_id := util.buildhelpers.get_attack_id(datasource):
             datasource_data = {
                 "name": datasource['name'],
                 "id": attack_id,
-                "path": "/datasources/{}/".format(attack_id),
-                "children": []
+                "path": f"/datasources/{attack_id}/",
+                "children": [],
             }
+
 
             if datacomponent_of.get(datasource['id']):
                 for datacomponent in datacomponent_of[datasource['id']]:
@@ -167,9 +157,10 @@ def get_datasources_side_nav_data(datasources):
                         datacomponent_data = {
                             "name": datacomponent['name'],
                             "id": datacomponent['name'],
-                            "path": "/datasources/{}/#{}".format(attack_id, datacomponent['name']),
-                            "children": []
+                            "path": f"/datasources/{attack_id}/#{datacomponent['name']}",
+                            "children": [],
                         }
+
 
                         # Add data component data to data source
                         datasource_data['children'].append(datacomponent_data)
@@ -182,7 +173,7 @@ def get_datasources_side_nav_data(datasources):
         side_nav_data.append(datasource_data)
 
     side_nav_data = sorted(side_nav_data, key=lambda k: k['name'].lower())
-    
+
     return {
         "name": "Data Sources",
         "id": "datasources",
@@ -198,12 +189,8 @@ def get_datasources_table_data(datasource_list):
     #Now the table on the right, which is made up of datasource data
     for datasource in datasource_list:
 
-        attack_id = util.buildhelpers.get_attack_id(datasource)
-
-        if attack_id:
-            row = {}
-
-            row['id'] = attack_id
+        if attack_id := util.buildhelpers.get_attack_id(datasource):
+            row = {'id': attack_id}
 
             if datasource.get("name"):
                 row['name'] = datasource['name']
@@ -213,9 +200,9 @@ def get_datasources_table_data(datasource_list):
 
                 if datasource.get('x_mitre_deprecated'):
                     row['deprecated'] = True
-            
+
             datasources_table_data.append(row)
-    
+
     # Sort by data source name
     datasources_table_data = sorted(datasources_table_data, key=lambda k: k['name'].lower())
 
@@ -238,15 +225,17 @@ def get_datacomponents_data(datasource, reference_list):
             if not datacomponent.get('x_mitre_deprecated') and not datacomponent.get('revoked'):
                 reference = False
 
-                datacomponent_data = {}
-                datacomponent_data['name'] = datacomponent['name']
-                datacomponent_data['descr'] = datacomponent['description']
+                datacomponent_data = {
+                    'name': datacomponent['name'],
+                    'descr': datacomponent['description'],
+                }
+
                 # Update reference list
                 reference_list = util.buildhelpers.update_reference_list(reference_list, datacomponent)
 
-                # get data components to techniques mapping
-                techniques_detected_by_datacomponent = rsg.get_techniques_detected_by_datacomponent().get(datacomponent['id'])
-                if techniques_detected_by_datacomponent:
+                if techniques_detected_by_datacomponent := rsg.get_techniques_detected_by_datacomponent().get(
+                    datacomponent['id']
+                ):
                     datacomponent_data['techniques'] = []
 
                     technique_list = {}
@@ -255,12 +244,14 @@ def get_datacomponents_data(datasource, reference_list):
                         # Do not add if technique is deprecated
                         if not technique_rel['object'].get('x_mitre_deprecated'):
                             technique_list = util.buildhelpers.technique_used_helper(technique_list, technique_rel, reference_list)
-                            
+
                             technique_data = []
                             for item in technique_list:
-                                if technique_list[item].get('descr'):
-                                    if reference == False:
-                                        reference = True
+                                if (
+                                    technique_list[item].get('descr')
+                                    and reference == False
+                                ):
+                                    reference = True
                                 technique_data.append(technique_list[item])
                             # Sort by technique name
                             technique_data = sorted(technique_data, key=lambda k: k['name'].lower())
@@ -269,7 +260,7 @@ def get_datacomponents_data(datasource, reference_list):
                             datacomponent_data['add_datacomponent_ref'] = reference
 
                 datacomponents_data.append(datacomponent_data)
-    
+
     # Sort output by data component name
     datacomponents_data = sorted(datacomponents_data, key=lambda k: k['name'].lower())
 

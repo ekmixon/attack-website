@@ -15,18 +15,21 @@ test_choices = ['size', 'links', 'external_links', 'citations']
 
 def validate_subdirectory_string(subdirectory_str):
     """ Validate subdirectory string """
-    
+
     if not subdirectory_str.isascii():
-        raise argparse.ArgumentTypeError("%s contains non ascii characters" % subdirectory_str)
+        raise argparse.ArgumentTypeError(
+            f"{subdirectory_str} contains non ascii characters"
+        )
+
 
     # Remove leading and trailing /
     if subdirectory_str.startswith("/"):
         subdirectory_str = subdirectory_str[1:]
     if subdirectory_str.endswith("/"):
         subdirectory_str = subdirectory_str[:-1]
-    
+
     site_config.set_subdirectory(subdirectory_str)
-    
+
     return subdirectory_str
     
 def get_parsed_args():

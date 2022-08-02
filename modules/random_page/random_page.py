@@ -17,7 +17,7 @@ def generate_json():
                 routes[module] = all_routes[module]
     else:
         routes = all_routes
-    
+
     for root, __, files in os.walk("output"):
         # only walk specified routes for object pages
         for route, value in routes.items():
@@ -50,7 +50,7 @@ def generate_json():
 
                         if add_to_json:
                             json_data[value].append(thepath[6:])
-    
+
     if not os.path.isdir(site_config.web_directory):
         os.makedirs(site_config.web_directory)
 
@@ -58,10 +58,8 @@ def generate_json():
 
 def check_skipindex(filepath):
     """clean the file of all HTML tags and unnecessary data"""
-    f = open(filepath, mode="r", encoding="utf8")
-    lines = f.readlines()
-    f.close()
-
+    with open(filepath, mode="r", encoding="utf8") as f:
+        lines = f.readlines()
     skipindex = False
     for line in lines:
         if 'http-equiv="refresh"' in line: skipindex = True

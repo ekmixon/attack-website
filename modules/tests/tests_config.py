@@ -28,7 +28,15 @@ RELATIVE_LINKS_FOUND = -13
 RESET = '\033[0m'  # mode 0  = reset
 
 # Testing output statuses
-PASSED_STATUS = colorama.Fore.GREEN + "PASSED" + RESET + " " * (util.util_config.status_space - len("PASSED"))
-FAILED_STATUS = colorama.Fore.RED + "FAILED" + RESET + " " * (util.util_config.status_space - len("FAILED"))
-WARNING_STATUS = colorama.Fore.YELLOW + "WARNING" + RESET + " " * (util.util_config.status_space - len("WARNING")) 
+PASSED_STATUS = f"{colorama.Fore.GREEN}PASSED{RESET}" + " " * (
+    util.util_config.status_space - len("PASSED")
+)
+
+FAILED_STATUS = f"{colorama.Fore.RED}FAILED{RESET}" + " " * (
+    util.util_config.status_space - len("FAILED")
+)
+
+WARNING_STATUS = f"{colorama.Fore.YELLOW}WARNING{RESET}" + " " * (
+    util.util_config.status_space - len("WARNING")
+) 
 

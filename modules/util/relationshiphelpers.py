@@ -34,60 +34,56 @@ def get_related(srcs, src_type, rel_type, target_type, reverse=False):
         if relationship.get('x_mitre_deprecated'): continue
         if (src_type in relationship.source_ref and target_type in relationship.target_ref):
             if (relationship.source_ref in id_to_related and not reverse) or (relationship.target_ref in id_to_related and reverse):
-                if not reverse: 
-                    id_to_related[relationship.source_ref].append({
-                        "relationship": relationship,
-                        "id": relationship.target_ref
-                    })
-                else:
+                if reverse:
                     id_to_related[relationship.target_ref].append({
                         "relationship": relationship, 
                         "id": relationship.source_ref
                     })
-            else:
-                if not reverse: 
-                    id_to_related[relationship.source_ref] = [{
-                        "relationship": relationship, 
+                else: 
+                    id_to_related[relationship.source_ref].append({
+                        "relationship": relationship,
                         "id": relationship.target_ref
-                    }]
-                else:
-                    id_to_related[relationship.target_ref] = [{
-                        "relationship": relationship, 
-                        "id": relationship.source_ref
-                    }]
+                    })
+            elif not reverse: 
+                id_to_related[relationship.source_ref] = [{
+                    "relationship": relationship, 
+                    "id": relationship.target_ref
+                }]
+            else:
+                id_to_related[relationship.target_ref] = [{
+                    "relationship": relationship, 
+                    "id": relationship.source_ref
+                }]
     # all objects of target type
     if not reverse:
-        if target_type.startswith('x-mitre'):
-            targets = query_all(srcs, [
-                Filter('type', '=', target_type)
-            ])
-        else:
-            targets = query_all(srcs, [
-                Filter('type', '=', target_type),
-                Filter('revoked', '=', False)
-            ])
+        targets = (
+            query_all(srcs, [Filter('type', '=', target_type)])
+            if target_type.startswith('x-mitre')
+            else query_all(
+                srcs,
+                [
+                    Filter('type', '=', target_type),
+                    Filter('revoked', '=', False),
+                ],
+            )
+        )
+
+    elif src_type.startswith('x-mitre'):
+        targets = query_all(srcs, [
+            Filter('type', '=', src_type)
+        ])
     else:
-        if src_type.startswith('x-mitre'):
-            targets = query_all(srcs, [
-                Filter('type', '=', src_type)
-            ])
-        else:
-            targets = query_all(srcs, [
-                Filter('type', '=', src_type),
-                Filter('revoked', '=', False)
-            ])
+        targets = query_all(srcs, [
+            Filter('type', '=', src_type),
+            Filter('revoked', '=', False)
+        ])
 
-    id_to_target = {}
-    # build the dict
-    for target in targets:
-        if target.get('id'):
-            id_to_target[target['id']] = target
-
+    id_to_target = {target['id']: target for target in targets if target.get('id')}
     output = {}
-    for stix_id in id_to_related:
+    for stix_id, value_ in id_to_related.items():
         value = []
-        for related in id_to_related[stix_id]:
-            if not related["id"] in id_to_target:
+        for related in value_:
+            if related["id"] not in id_to_target:
                 continue # targetting a revoked object
 
             if related["id"].startswith('x-mitre'):

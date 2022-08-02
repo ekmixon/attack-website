@@ -23,8 +23,11 @@ def check_redirections(redirections_list):
             # Check if it redirects to the same link, otherwise it is a conflict
             if master_redirections_dict[redirection['from']] != redirection['to']:
                 print("Redirection conflict!")
-                print("\t1. [{} => {}]".format(redirection['from'], redirection['to']))
-                print("\t2. [{} => {}]".format(redirection['from'], master_redirections_dict[redirection['from']]))
+                print(f"\t1. [{redirection['from']} => {redirection['to']}]")
+                print(
+                    f"\t2. [{redirection['from']} => {master_redirections_dict[redirection['from']]}]"
+                )
+
                 print("Exiting...")
                 exit()
         else:

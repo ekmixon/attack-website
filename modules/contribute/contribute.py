@@ -15,7 +15,7 @@ def generate_contribute():
 
     # Generate redirections
     util.buildhelpers.generate_redirections(contribute_config.contribute_redirection_location)
-    
+
     ms = util.relationshipgetters.get_ms()
     contributors = util.stixhelpers.get_contributors(ms)
 
@@ -23,21 +23,15 @@ def generate_contribute():
         util.buildhelpers.remove_module_from_menu(contribute_config.module_name)
         return  
 
-    data = {}
-
-    data['contributors'] = []
-
-    contributors_first_col = []
-    contributors_second_col = []
+    data = {'contributors': []}
 
     half = math.ceil((len(contributors))/2)
     list_size = len(contributors)
 
-    for index in range(0, half):
-        contributors_first_col.append(contributors[index])
-    
-    for index in range(half, list_size):
-        contributors_second_col.append(contributors[index])
+    contributors_first_col = [contributors[index] for index in range(half)]
+    contributors_second_col = [
+        contributors[index] for index in range(half, list_size)
+    ]
 
     data['contributors'].append(contributors_first_col)
     data['contributors'].append(contributors_second_col)

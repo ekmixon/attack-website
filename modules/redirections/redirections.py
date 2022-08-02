@@ -38,12 +38,12 @@ def generate_markdown_files(domain):
             if new_attack_id:
                 if obj.get('revoked'):
 
-                    revoked_by_obj = util.stixhelpers.get_revoked_by(obj['id'], ms[domain])
-
-                    if revoked_by_obj:
-                        revoked_attack_id = util.buildhelpers.get_attack_id(revoked_by_obj)
-
-                        if revoked_attack_id:
+                    if revoked_by_obj := util.stixhelpers.get_revoked_by(
+                        obj['id'], ms[domain]
+                    ):
+                        if revoked_attack_id := util.buildhelpers.get_attack_id(
+                            revoked_by_obj
+                        ):
                             generate_obj_redirect(redirections_config.general_redirects_dict[types[0]], revoked_attack_id, old_attack_id, domain)
 
                             if old_attack_id != new_attack_id:
@@ -71,12 +71,9 @@ def generate_tactic_redirects(ms, domain):
     data = {}
     for tactic in tactics:
 
-        attack_id = util.buildhelpers.get_attack_id(tactic)
-
-        if attack_id:
-
+        if attack_id := util.buildhelpers.get_attack_id(tactic):
             data['title'] = tactic["name"].replace(' ', '_') + "-" + domain + str(uuid.uuid1())
-            data['to'] = "/tactics/" + attack_id
+            data['to'] = f"/tactics/{attack_id}"
             data['from'] = redirections_config.redirects_paths[domain] + tactic['name'].replace(' ', '_')
 
         subs = site_config.redirect_md.substitute(data)
@@ -87,14 +84,12 @@ def generate_tactic_redirects(ms, domain):
 def generate_obj_redirect(redirect_link, new_attack_id, old_attack_id, domain):
     """Responsible for generating redirects markdown for given data"""
 
-    data = {}
-
-    data['title'] = old_attack_id + str(uuid.uuid1())
+    data = {'title': old_attack_id + str(uuid.uuid1())}
 
     # Check if new id or old id are subtechniques and change to redirection format
     if(util.buildhelpers.is_sub_tid(new_attack_id)):
         new_attack_id = util.buildhelpers.redirection_subtechnique(new_attack_id)
-    
+
     if(util.buildhelpers.is_sub_tid(old_attack_id)):
         old_attack_id = util.buildhelpers.redirection_subtechnique(old_attack_id)
 

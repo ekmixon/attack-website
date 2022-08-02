@@ -39,31 +39,24 @@ def generate_markdown_files():
        all groups
     """
 
-    has_group = False
-
     group_list = util.relationshipgetters.get_group_list()
 
     group_list_no_deprecated_revoked = util.buildhelpers.filter_deprecated_revoked(group_list)
 
-    if group_list_no_deprecated_revoked:
-        has_group = True
-
+    has_group = bool(group_list_no_deprecated_revoked)
     if has_group:
-        data = {}
-
         # Amount of characters per category
         group_by = 2
 
         notes = util.relationshipgetters.get_objects_using_notes()
         side_menu_data = util.buildhelpers.get_side_menu_data("Groups", "/groups/", group_list_no_deprecated_revoked)
-        data['side_menu_data'] = side_menu_data
-
+        data = {'side_menu_data': side_menu_data}
         side_menu_mobile_view_data = util.buildhelpers.get_side_menu_mobile_view_data("groups", "/groups/", group_list_no_deprecated_revoked, group_by)
         data['side_menu_mobile_view_data'] = side_menu_mobile_view_data
 
         data['groups_table'] = get_groups_table_data(group_list_no_deprecated_revoked)
         data['groups_list_len'] = str(len(group_list_no_deprecated_revoked))
-        
+
         subs = groups_config.group_index_md + json.dumps(data)
 
         with open(os.path.join(groups_config.group_markdown_path, "overview.md"), "w", encoding='utf8') as md_file:
@@ -72,102 +65,102 @@ def generate_markdown_files():
         #Create the markdown for the enterprise groups in the STIX
         for group in group_list:
             generate_group_md(group, side_menu_data, side_menu_mobile_view_data, notes)
-    
+
     return has_group
 
 def generate_group_md(group, side_menu_data, side_menu_mobile_view_data, notes):
     """Responsible for generating markdown of all groups"""
 
-    attack_id = util.buildhelpers.get_attack_id(group)
+    if not (attack_id := util.buildhelpers.get_attack_id(group)):
+        return
+    data = {
+        'attack_id': attack_id,
+        'side_menu_data': side_menu_data,
+        'side_menu_mobile_view_data': side_menu_mobile_view_data,
+        'notes': notes.get(group['id']),
+    }
 
-    if attack_id:
-        data = {}
 
-        data['attack_id'] = attack_id
+    # External references
+    ext_ref = group["external_references"]
 
-        data['side_menu_data'] = side_menu_data
-        data['side_menu_mobile_view_data'] = side_menu_mobile_view_data
-        data['notes'] = notes.get(group['id'])
+    dates = util.buildhelpers.get_created_and_modified_dates(group)
 
-        # External references
-        ext_ref = group["external_references"]
+    if dates.get('created'):
+        data['created'] = dates['created']
 
-        dates = util.buildhelpers.get_created_and_modified_dates(group)
-        
-        if dates.get('created'):
-            data['created'] = dates['created']
+    if dates.get('modified'):
+        data['modified'] = dates['modified']
 
-        if dates.get('modified'):
-            data['modified'] = dates['modified']
+    if group.get("name"):
+        data['name'] = group['name']
 
-        if group.get("name"):
-            data['name'] = group['name']
-        
-        if group.get("x_mitre_version"):
-            data['version'] = group["x_mitre_version"]
+    if group.get("x_mitre_version"):
+        data['version'] = group["x_mitre_version"]
 
-        if isinstance(group.get("x_mitre_contributors"),collections.Iterable):
-            data['contributors_list'] = group["x_mitre_contributors"]
+    if isinstance(group.get("x_mitre_contributors"),collections.Iterable):
+        data['contributors_list'] = group["x_mitre_contributors"]
 
-        # Get initial reference list
-        reference_list = {'current_number': 0}
+    # Get initial reference list
+    reference_list = {'current_number': 0}
 
-        # Get initial reference list from group object
-        reference_list = util.buildhelpers.update_reference_list(reference_list, group)
+    # Get initial reference list from group object
+    reference_list = util.buildhelpers.update_reference_list(reference_list, group)
 
-        if group.get("description"):
-            data['descr'] = group['description']
-        
-        if group.get('x_mitre_deprecated'):
-            data['deprecated'] = True
+    if group.get("description"):
+        data['descr'] = group['description']
 
-        # Get technique data for techniques used table
-        data['technique_table_data'] = get_techniques_used_by_group_data(group, reference_list)
+    if group.get('x_mitre_deprecated'):
+        data['deprecated'] = True
+
+    # Get technique data for techniques used table
+    data['technique_table_data'] = get_techniques_used_by_group_data(group, reference_list)
 
         # Get navigator layers for this group
-        layers = util.buildhelpers.get_navigator_layers(
-            data['name'], 
-            data["attack_id"],
-            "group",
-            data["version"] if "version" in data else None,
-            data['technique_table_data'], 
-        )
+    layers = util.buildhelpers.get_navigator_layers(
+        data['name'],
+        data["attack_id"],
+        "group",
+        data.get("version", None),
+        data['technique_table_data'],
+    )
 
-        data["layers"] = []
-        for layer in layers:
-            with open(os.path.join(groups_config.group_markdown_path, "-".join([data['attack_id'], "techniques", layer["domain"]]) + ".md"), "w", encoding='utf8') as layer_json:
-                subs = site_config.layer_md.substitute({
-                    "attack_id": data["attack_id"],
-                    "path": "groups/" + data["attack_id"],
-                    "domain": layer["domain"]
-                })
-                subs = subs + layer["layer"]
-                layer_json.write(subs)
-            data["layers"].append({
-                "domain": layer["domain"],
-                "filename": "-".join([data["attack_id"], layer["domain"], "layer"]) + ".json",
-                "navigator_link" : site_config.navigator_link
+
+    data["layers"] = []
+    for layer in layers:
+        with open(os.path.join(groups_config.group_markdown_path, "-".join([data['attack_id'], "techniques", layer["domain"]]) + ".md"), "w", encoding='utf8') as layer_json:
+            subs = site_config.layer_md.substitute({
+                "attack_id": data["attack_id"],
+                "path": "groups/" + data["attack_id"],
+                "domain": layer["domain"]
             })
+            subs = subs + layer["layer"]
+            layer_json.write(subs)
+        data["layers"].append({
+            "domain": layer["domain"],
+            "filename": "-".join([data["attack_id"], layer["domain"], "layer"]) + ".json",
+            "navigator_link" : site_config.navigator_link
+        })
 
-        # Grab software data for Software table
-        data['software_data'], data['add_software_ref'] = get_software_table_data(group, reference_list)
+    # Grab software data for Software table
+    data['software_data'], data['add_software_ref'] = get_software_table_data(group, reference_list)
 
-        if group.get('aliases'):
-            data['alias_descriptions'] = util.buildhelpers.get_alias_data(group['aliases'][1:], ext_ref)
+    if group.get('aliases'):
+        data['alias_descriptions'] = util.buildhelpers.get_alias_data(group['aliases'][1:], ext_ref)
 
-        data['citations'] = reference_list
-                
-        if isinstance(group.get("aliases"), collections.Iterable):
-            data['aliases_list'] = group["aliases"][1:]
-        
-        data['versioning_feature'] = site_config.check_versions_module()
+    data['citations'] = reference_list
 
-        subs = groups_config.group_md.substitute(data)
-        subs = subs + json.dumps(data)
+    if isinstance(group.get("aliases"), collections.Iterable):
+        data['aliases_list'] = group["aliases"][1:]
 
-        # Write out the markdown file
-        with open(os.path.join(groups_config.group_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
-            md_file.write(subs)
+    data['versioning_feature'] = site_config.check_versions_module()
+
+    subs = groups_config.group_md.substitute(data)
+    subs = subs + json.dumps(data)
+
+    # Write out the markdown file
+    with open(os.path.join(groups_config.group_markdown_path, data['attack_id'] + ".md"), "w", encoding='utf8') as md_file:
+        md_file.write(subs)
 
 def get_groups_table_data(group_list):
     """Responsible for generating group table data for the group index page"""
@@ -177,12 +170,8 @@ def get_groups_table_data(group_list):
     #Now the table on the right, which is made up of group data
     for group in group_list:
 
-        attack_id = util.buildhelpers.get_attack_id(group)
-
-        if attack_id:
-            row = {}
-
-            row['id'] = attack_id
+        if attack_id := util.buildhelpers.get_attack_id(group):
+            row = {'id': attack_id}
 
             if group.get("name"):
                 row['name'] = group['name']
@@ -195,9 +184,9 @@ def get_groups_table_data(group_list):
 
             if isinstance(group.get("aliases"), collections.Iterable):
                 row['aliases_list'] = group["aliases"][1:]
-            
+
             groups_table_data.append(row)
-    
+
     return groups_table_data
 
 def get_techniques_used_by_group_data(group, reference_list):
@@ -205,7 +194,7 @@ def get_techniques_used_by_group_data(group, reference_list):
        group. Check the reference list for citations, if not found
        in list, add it.
     """
-    
+
     technique_list = {}
 
     techniques_used_by_groups = util.relationshipgetters.get_techniques_used_by_groups()
@@ -216,9 +205,7 @@ def get_techniques_used_by_group_data(group, reference_list):
             if not technique['object'].get('x_mitre_deprecated'):
                 technique_list = util.buildhelpers.technique_used_helper(technique_list, technique, reference_list)
 
-    technique_data = []
-    for item in technique_list:
-        technique_data.append(technique_list[item])
+    technique_data = [technique_list[item] for item in technique_list]
     # Sort by technique name
     technique_data = sorted(technique_data, key=lambda k: k['name'].lower())
 

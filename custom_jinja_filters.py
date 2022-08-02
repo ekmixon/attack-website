@@ -37,7 +37,8 @@ def clean_path(path):
     """ remove index.html from end of a path, add / if not at beginning """
 
     path = path.split("index.html")[0]
-    if not path.startswith("/"): path = "/" + path
+    if not path.startswith("/"):
+        path = f"/{path}"
     if not path.endswith("/"): path += "/"
     return path
 
@@ -88,11 +89,22 @@ def get_html_citation(citations, citation_name):
             citations['current_number'] = ref_number
             citation['number'] = ref_number
 
-        if not citation.get('url'):
-            reference_html = reference_marker_template_no_url.format(ref_number,ref_number,citation_name,ref_number)
-        else:
-            reference_html = reference_marker_template.format(ref_number,ref_number,citation_name,citation['url'],ref_number - 1, ref_number - 1, ref_number)
-        
+        reference_html = (
+            reference_marker_template.format(
+                ref_number,
+                ref_number,
+                citation_name,
+                citation['url'],
+                ref_number - 1,
+                ref_number - 1,
+                ref_number,
+            )
+            if citation.get('url')
+            else reference_marker_template_no_url.format(
+                ref_number, ref_number, citation_name, ref_number
+            )
+        )
+
     return reference_html
 
 def update_citations(data, citations):
@@ -103,13 +115,11 @@ def update_citations(data, citations):
     citation_template = "(Citation: {})"
 
     citation_names = get_citations(data)
-    
-    for citation_name in citation_names:
-        replace_string = get_html_citation(citations, citation_name)
 
-        if replace_string:
+    for citation_name in citation_names:
+        if replace_string := get_html_citation(citations, citation_name):
             data = data.replace(citation_template.format(citation_name), replace_string)
-    
+
     return data
 
 def remove_citations(data):
@@ -119,7 +129,7 @@ def remove_citations(data):
     citation_names = get_citations(data)
 
     for citation_name in citation_names:
-        data = data.replace("(Citation: " + citation_name + ")","")
+        data = data.replace(f"(Citation: {citation_name})", "")
 
     return data
 
@@ -184,8 +194,8 @@ def permalink(link):
         with open(os.path.join("data", "versions.json"), "r", encoding='utf8') as f:
             currentVersion = json.load(f)["current"]
             current_version_permalink = currentVersion["path"] if "path" in currentVersion else currentVersion["name"].split(".")[0]
-            current_version_permalink = "/versions/" + current_version_permalink
+            current_version_permalink = f"/versions/{current_version_permalink}"
     # remove index.html from the end
     link = link.split("index.html")[0] if link.endswith("index.html") else link
     # strip index.html from path
-    return current_version_permalink + "/" + link
+    return f"{current_version_permalink}/{link}"

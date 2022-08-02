@@ -37,20 +37,16 @@ def get_matrices(src, domain):
 def get_datasources(srcs):
     """Reads the STIX and returns a list of data sources in the STIX"""
 
-    datasources = rsh.query_all(srcs, [
-        stix2.Filter('type', '=', 'x-mitre-data-source')]
+    return rsh.query_all(
+        srcs, [stix2.Filter('type', '=', 'x-mitre-data-source')]
     )
-
-    return datasources
 
 def get_datacomponents(srcs):
     """Reads the STIX and returns a list of data components in the STIX"""
 
-    datacomponents = rsh.query_all(srcs, [
-        stix2.Filter('type', '=', 'x-mitre-data-component')]
+    return rsh.query_all(
+        srcs, [stix2.Filter('type', '=', 'x-mitre-data-component')]
     )
-
-    return datacomponents
 
 def get_tactic_list(src, domain, matrix_id=None):
     """Reads the STIX and returns a list of all tactics in the STIX"""
@@ -65,16 +61,21 @@ def get_tactic_list(src, domain, matrix_id=None):
     if matrix_id:
         for curr_matrix in matrices:
             if curr_matrix['id'] == matrix_id:
-                for tactic_id in curr_matrix['tactic_refs']:
-                    tactics.append(src.query([stix2.Filter('id', '=', tactic_id)])[0])    
+                tactics.extend(
+                    src.query([stix2.Filter('id', '=', tactic_id)])[0]
+                    for tactic_id in curr_matrix['tactic_refs']
+                )
+
     else:
         for matrix in matrices:
-            for tactic_id in matrix['tactic_refs']:
-                tactics.append(src.query([stix2.Filter('id', '=', tactic_id)])[0])
-    
+            tactics.extend(
+                src.query([stix2.Filter('id', '=', tactic_id)])[0]
+                for tactic_id in matrix['tactic_refs']
+            )
+
     # Filter out by domain
     tactics = [x for x in tactics if not hasattr(x, 'x_mitre_domains') or domain in x.get('x_mitre_domains')]
-    
+
     return tactics
 
 def get_all_of_type(src, types):
@@ -151,7 +152,7 @@ def get_examples(tech_stix_id, src):
                              'id': attack_id, 
                              'description': r.description, 
                              'ext_refs': curr_refs})
-    
+
     examples = sorted(examples, key=lambda k: k['name'].lower())
     for example in examples:
         if example['ext_refs']:
@@ -161,7 +162,7 @@ def get_examples(tech_stix_id, src):
 
 def get_technique_id_domain_map(ms):
     """Create map from technique_id to domain"""
-    
+
     tech_list = {}
 
     for domain in site_config.domains:
@@ -171,8 +172,7 @@ def get_technique_id_domain_map(ms):
             stix2.Filter('revoked', '=', False)
         ])
         for val in curr_list:
-            technique_id = buildhelpers.get_attack_id(val)
-            if technique_id:
+            if technique_id := buildhelpers.get_attack_id(val):
                 if val.get('x_mitre_domains'):
                     if domain['name'] in val['x_mitre_domains']:
                         if tech_list.get(technique_id) and domain['name'] not in tech_list[technique_id]:
@@ -204,11 +204,14 @@ def get_datasource_from_list(datasource_stix_id):
 
     datasources = relationshipgetters.get_datasource_list()
 
-    for datasource in datasources:
-        if datasource['id'] == datasource_stix_id:
-            return datasource
-    
-    return None
+    return next(
+        (
+            datasource
+            for datasource in datasources
+            if datasource['id'] == datasource_stix_id
+        ),
+        None,
+    )
 
 def datasource_of():
     """
@@ -221,9 +224,9 @@ def datasource_of():
     for datacomponent in datacomponents:
         if not datasource_of.get(datacomponent['id']):
 
-            datasource = get_datasource_from_list(datacomponent['x_mitre_data_source_ref'])
-
-            if datasource:
+            if datasource := get_datasource_from_list(
+                datacomponent['x_mitre_data_source_ref']
+            ):
                 datasource_of[datacomponent['id']] = datasource
 
     return datasource_of
@@ -243,9 +246,9 @@ def add_replace_or_ignore(stix_objs, attack_id_objs, obj_in_question):
             conflict_attack_id = buildhelpers.get_attack_id(conflict)
             if conflict_attack_id != attack_id and attack_id_objs.get(conflict_attack_id):
                 return conflict_attack_id
-        
+
         return None
-    
+
     def replace_object(attack_id, conflict_attack_id):
         # Replaces object on ATT&CK and STIX maps
         # Verify for STIX to ATT&CK conflict
@@ -382,10 +385,7 @@ def get_stix_memory_stores():
     ms = {}
     srcs = []
 
-    # Set proxy
-    proxy  = ""
-    if site_config.args.proxy:
-        proxy = site_config.args.proxy
+    proxy = site_config.args.proxy or ""
     proxyDict = { 
         "http"  : proxy,
         "https" : proxy
@@ -403,13 +403,12 @@ def get_stix_memory_stores():
                 exit(f"\n{domain['location']} stix bundle was not found")
             else:
                 exit(f"\n{domain['location']} stix bundle download was unsuccessful")
+        elif os.path.exists(domain['location']):
+            ms[domain['name']] = stix2.MemoryStore()
+            ms[domain['name']].load_from_file(domain['location'])
         else:
-            if os.path.exists(domain['location']):
-                ms[domain['name']] = stix2.MemoryStore()
-                ms[domain['name']].load_from_file(domain['location'])
-            else:
-                exit(f"\n{domain['location']} local file does not exist. If you intended a URL, please include http:// or https://")
-        
+            exit(f"\n{domain['location']} local file does not exist. If you intended a URL, please include http:// or https://")
+
         if not domain['deprecated']:
             srcs.append(ms[domain['name']])
 
@@ -438,5 +437,5 @@ def get_contributors(ms):
             if 'x_mitre_contributors' in obj:
                 contributors += obj['x_mitre_contributors']
     contributors = list(set(contributors))
-    
+
     return sorted(contributors, key=lambda k: k.lower())

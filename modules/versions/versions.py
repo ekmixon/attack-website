@@ -64,8 +64,7 @@ allowed_in_link = "".join(list(map(lambda s: s.strip(), [
 
 def versionPath(version):
     # get the path of a given version
-    if "path" in version: return version["path"]
-    else: return version["name"].split(".")[0] # parse path from name if not given explicitly
+    return version["path"] if "path" in version else version["name"].split(".")[0]
 
 def deploy():
     """ Deploy previous versions to website directory """
@@ -114,7 +113,7 @@ def deploy_current_version():
         os.mkdir(os.path.join(versions_config.prev_versions_deploy_folder, versionPath(version)))
     for item in os.listdir(site_config.web_directory):
         # skip previous and versions directories when copying
-        if item == "previous" or item == "versions": continue
+        if item in ["previous", "versions"]: continue
         # copy the current version into a preserved version
         src = os.path.join(site_config.web_directory, item)
         dest = os.path.join(versions_config.prev_versions_deploy_folder, versionPath(version), item)
@@ -173,7 +172,7 @@ def archive(version_data, is_current=False):
     for prev_directory in map(lambda d: os.path.join(version_path, d), ["previous", versions_config.prev_versions_path, os.path.join("resources", "previous-versions"), os.path.join("resources", "versions")]):
         if os.path.exists(prev_directory):
             shutil.rmtree(prev_directory, onerror=onerror)
-    
+
     # remove updates page
     updates_dir = os.path.join(version_path, "resources", "updates")
     if os.path.exists(updates_dir):
@@ -200,7 +199,7 @@ def archive(version_data, is_current=False):
                 from_str = f"{prefix}=([{allowed_in_link}]+)[\"']"
                 to_str = f'{prefix}={dest_link_format}"'
                 return re.sub(from_str, to_str, html_str)
-            
+
             # replace links so that they properly point to where the version is stored
             html_str = substitute("src", html_str)
             html_str = substitute("href", html_str)
@@ -210,7 +209,7 @@ def archive(version_data, is_current=False):
                 html_str = html_str.replace(f"/{version_url_path}/resources/{previous_page}/", "/resources/versions/")
             # update links to updates to point to main site instead of archied page
             html_str = html_str.replace(f"/{version_url_path}/resources/updates/", "/resources/updates/")
-            
+
             # update versioning button to show the permalink site version, aka "back to main site"
             html_str = html_str.replace("version-button live", "version-button permalink")
             # update live version links on the versioning button
@@ -275,12 +274,9 @@ def build_alias(version, alias):
             newRoot = root.replace(version, alias).replace(versions_config.prev_versions_path, "previous")
             # file to build
             redirectFrom = os.path.join(newRoot, thefile)
-            
+
             # where this file should point to
-            if thefile == "index.html": 
-                redirectTo = root # index.html is implicit
-            else:
-                redirectTo = "/".join([root, thefile])  # file is not index.html so it needs to be specified explicitly
+            redirectTo = root if thefile == "index.html" else "/".join([root, thefile])
             redirectTo = redirectTo.split(site_config.parent_web_directory)[1] # remove parent web folder from path
 
             # write the redirect file

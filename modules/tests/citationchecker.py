@@ -22,14 +22,14 @@ def citations_check():
             if filename.endswith('.html'):
                 filepath = os.path.join(directory,filename)
                 with open(
-                        filepath,'r', 
-                        encoding='utf8') as f_handle:
+                                        filepath,'r', 
+                                        encoding='utf8') as f_handle:
                     data = f_handle.read()
                     for issue in potential_issues_list:
                         p = re.compile(issue)
                         check = p.findall(data)
                         for entry in check:
-                            if not entry in problems:   
+                            if entry not in problems:   
                                 problems.append(entry)
             if not problems:
                 okay_files += 1

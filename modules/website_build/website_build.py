@@ -48,7 +48,7 @@ def generate_javascript_settings():
     if os.path.exists(javascript_settings_file):
         with open(javascript_settings_file, "r", encoding='utf8') as js_f:
             for line in js_f:
-                if not "base_url" in line and not "build_uuid" in line:
+                if "base_url" not in line and "build_uuid" not in line:
                     # Copy line to data buffer
                     data += line
 
@@ -56,12 +56,12 @@ def generate_javascript_settings():
         # Get subdirectory path, will be empty if it was not declared
         web_dir = site_config.subdirectory
         if not web_dir.startswith("/"):
-            web_dir = "/" + web_dir
-        
+            web_dir = f"/{web_dir}"
+
         web_dir = web_dir.replace("\\", "/")
 
         if not web_dir.endswith("/"):
-            web_dir = web_dir + "/"
+            web_dir = f"{web_dir}/"
 
         js_data = website_build_config.js_dir_settings.substitute({"web_directory": web_dir})
 
@@ -83,9 +83,10 @@ def generate_base_html():
     website_build_config.base_page_data['ATTACK_BRANDING'] = site_config.args.attack_brand
     website_build_config.base_page_data['RESOURCES'] = [key['module_name'] for key in modules.run_ptr if key['module_name'] == 'resources']
 
-    if site_config.args.attack_brand:
-        if website_build_config.base_page_data['BANNER_MESSAGE'].startswith("This is a custom instance"):
-            website_build_config.base_page_data['BANNER_ENABLED'] = False
+    if site_config.args.attack_brand and website_build_config.base_page_data[
+        'BANNER_MESSAGE'
+    ].startswith("This is a custom instance"):
+        website_build_config.base_page_data['BANNER_ENABLED'] = False
 
     with open(os.path.join(website_build_config.template_dir, "base-template.html"), "r", encoding='utf8') as base_template_f:
         base_template = base_template_f.read()
@@ -97,12 +98,9 @@ def generate_base_html():
 
 def generate_index_page():
     """Responsible for creating the landing page"""
-    data = {}
-
     # get index matrix data
     matrix = website_build_config.index_matrix
-    data['matrix_name'] = matrix['name']
-    data['matrix_descr'] = matrix['descr']
+    data = {'matrix_name': matrix['name'], 'matrix_descr': matrix['descr']}
     data["matrices"], data["has_subtechniques"], data["tour_technique"] = matrices.matrices.get_sub_matrices(matrix)
     data['logo_landingpage'] = website_build_config.base_page_data['logo_landingpage']
     data['attack_branding'] = site_config.args.attack_brand
@@ -121,12 +119,12 @@ def generate_index_page():
     routes = {}
 
     if site_config.args.modules:
-        for route in all_routes.keys():
+        for route in all_routes:
             if route in site_config.args.modules:
                 routes[route] = all_routes[route]
     else:
         routes = all_routes
-    
+
     data['random_page_options'] = routes
 
     # Fill ATT&CK enterprise matrix of index pages
@@ -144,48 +142,50 @@ def store_pelican_settings():
 
 def override_colors():
     """ Override colors scss file if attack brand flag is enabled """
-    if site_config.args.attack_brand:
-        colors_scss_f = os.path.join(site_config.static_style_dir, "_colors.scss")
+    if not site_config.args.attack_brand:
+        return
+    colors_scss_f = os.path.join(site_config.static_style_dir, "_colors.scss")
 
-        temp_file = ""
-        with open(colors_scss_f, "r", encoding='utf8') as colors_f:
-            lines = colors_f.readlines()
+    temp_file = ""
+    with open(colors_scss_f, "r", encoding='utf8') as colors_f:
+        lines = colors_f.readlines()
 
-            end_search = True
-            for line in lines:
-                if end_search and line.startswith("//$use_attack_them"):
-                    temp_file += line[2:]
-                elif end_search and line.startswith("// end search"):
-                    end_search = False
-                    temp_file += line
-                else:
-                    temp_file += line
+        end_search = True
+        for line in lines:
+            if end_search and line.startswith("//$use_attack_them"):
+                temp_file += line[2:]
+            elif end_search and line.startswith("// end search"):
+                end_search = False
+                temp_file += line
+            else:
+                temp_file += line
 
-        with open(colors_scss_f, "w", encoding='utf8') as colors_f:
-            colors_f.write(temp_file)
+    with open(colors_scss_f, "w", encoding='utf8') as colors_f:
+        colors_f.write(temp_file)
 
 def reset_override_colors():
     """ Reset override colors scss file if attack brand flag is enabled """
 
-    if site_config.args.attack_brand:
-        colors_scss_f = os.path.join(site_config.static_style_dir, "_colors.scss")
+    if not site_config.args.attack_brand:
+        return
+    colors_scss_f = os.path.join(site_config.static_style_dir, "_colors.scss")
 
-        temp_file = ""
-        with open(colors_scss_f, "r", encoding='utf8') as colors_f:
-            lines = colors_f.readlines()
+    temp_file = ""
+    with open(colors_scss_f, "r", encoding='utf8') as colors_f:
+        lines = colors_f.readlines()
 
-            end_search = True
-            for line in lines:
-                if end_search and line.startswith("$use_attack_them"):
-                    temp_file += "//" + line
-                elif end_search and line.startswith("// end search"):
-                    end_search = False
-                    temp_file += line
-                else:
-                    temp_file += line
+        end_search = True
+        for line in lines:
+            if end_search and line.startswith("$use_attack_them"):
+                temp_file += f"//{line}"
+            elif end_search and line.startswith("// end search"):
+                end_search = False
+                temp_file += line
+            else:
+                temp_file += line
 
-        with open(colors_scss_f, "w", encoding='utf8') as colors_f:
-            colors_f.write(temp_file)
+    with open(colors_scss_f, "w", encoding='utf8') as colors_f:
+        colors_f.write(temp_file)
 
 def generate_faq_page():
     """Responsible for compiling faq json into faq markdown file

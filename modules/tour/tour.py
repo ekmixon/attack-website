@@ -33,7 +33,7 @@ def generate_tour():
     for matrix in matrices.matrices_config.matrices:
         if matrix["type"] == "external": continue # link to externally hosted matrix, ignore it
         tours.append(get_tour_steps(matrix))
-    
+
     # Choose longest tour
     def get_longest_tour():
 
@@ -42,9 +42,9 @@ def generate_tour():
             for tour in tours:
                 if len(tour.keys()) > len(longest.keys()):
                     longest = tour
-            
+
             return longest
-        
+
         return {}
 
     tour_steps = get_longest_tour()
@@ -85,7 +85,7 @@ def get_tour_steps(matrix):
         steps['matrix'] = "matrices/" + matrix['path']
     else:
         return steps
-    
+
     # Find technique with sub-techniques
     technique = get_technique_with_subtechniques(techs_no_subtechs)
 
@@ -129,7 +129,7 @@ def get_tour_steps(matrix):
             return group_tour
         elif not group_tour and software_tour:
             return software_tour
-        
+
         # First case, both tours have step 2 and 3
         if group_tour.get('step2') and software_tour.get('step2') and group_tour.get('step3') and software_tour.get('step3'):
             # If group tour has longer or equal steps length, return
@@ -171,7 +171,7 @@ def get_tour_steps(matrix):
 
     # Add group or software tour
     obj =  choose_software_or_group_tour()
-    
+
     if obj:
         steps['relationships'] = obj
 
@@ -200,7 +200,7 @@ def get_technique_with_subtechniques(techs_no_subtechs):
                 # Set counter and new techique
                 counter = subtech_count
                 chosen_tech = tech
-    
+
     return chosen_tech
 
 def get_subtech_n_of_technique(technique):
@@ -209,10 +209,9 @@ def get_subtech_n_of_technique(technique):
     subtechniques_of = util.relationshipgetters.get_subtechniques_of()
 
     for subtech in subtechniques_of[technique['id']]:
-        attack_id = util.buildhelpers.get_attack_id(subtech['object'])
-        if attack_id:
+        if attack_id := util.buildhelpers.get_attack_id(subtech['object']):
             return attack_id.split(".")[1]
-    
+
     return None
 
 def get_group_or_software_with_subtechniques(object_type):
@@ -225,7 +224,10 @@ def get_group_or_software_with_subtechniques(object_type):
         obj_list = util.relationshipgetters.get_software_list()
         # Combine tools and malware dictionaries in a copy
         techniques_used_by_type = dict(util.relationshipgetters.get_techniques_used_by_tools())
-        techniques_used_by_type.update(util.relationshipgetters.get_techniques_used_by_malware())
+        techniques_used_by_type |= (
+            util.relationshipgetters.get_techniques_used_by_malware()
+        )
+
 
     obj_tour_list = [] 
 
@@ -236,19 +238,19 @@ def get_group_or_software_with_subtechniques(object_type):
         if techniques_used_by_type.get(obj.get('id')):
             obj_has_subtechniques = False
             for technique in techniques_used_by_type[obj['id']]:
-                if not technique['object'].get('x_mitre_deprecated'):
-                    # Get techniques used list and only update if it has subtechniques
-                    if(techniques_used(technique_list, technique)):
-                        obj_has_subtechniques = True
-            
+                if not technique['object'].get('x_mitre_deprecated') and (
+                    techniques_used(technique_list, technique)
+                ):
+                    obj_has_subtechniques = True
+
             # Get list of potential tours if group has subtechniques
             if obj_has_subtechniques:
                 obj_tour = get_groups_tour(technique_list)
                 attack_id = util.buildhelpers.get_attack_id(obj)
                 if obj_tour and attack_id:
-                    obj_tour['obj_id'] = object_type + "/" + attack_id
+                    obj_tour['obj_id'] = f"{object_type}/{attack_id}"
                     obj_tour_list.append(obj_tour)
-    
+
     return find_best_group_or_software(obj_tour_list)
 
 def find_best_group_or_software(obj_tour_list):
@@ -308,25 +310,18 @@ def techniques_used(technique_list, technique):
 
                 # If parent technique not already in list, add to list and add current sub-technique
                 if parent_id not in technique_list:
-                    technique_list[parent_id] = {}
-                    technique_list[parent_id]['subtechniques'] = []
-
+                    technique_list[parent_id] = {'subtechniques': []}
                 technique_list[parent_id]['subtechniques'].append(attack_id)
-            
-            # Attack id is regular technique
+
             else:
                 # Add technique to list
-                technique_list[attack_id] = {}
-                technique_list[attack_id]['subtechniques'] = []
-
-        # Check if parent ID was added by sub-technique
-        # parent ID will not have description
+                technique_list[attack_id] = {'subtechniques': []}
         elif 'descr' not in technique_list[attack_id]:
             # Check if it has external references
             if technique['relationship'].get('description'):
                 # Get filtered description
                 technique_list[attack_id]['descr'] = True
-    
+
     return has_subtechniques
 
 def get_groups_tour(technique_list):
@@ -337,11 +332,7 @@ def get_groups_tour(technique_list):
     for technique in technique_list:
 
         # Step 1
-        if not technique_list[technique]['subtechniques']:
-            if not groups.get('step1'):
-                groups['step1'] = technique
-        # Step 2 and 3
-        else:
+        if technique_list[technique]['subtechniques']:
             # If Technique has relationship with group and subtechniques as well (Step 2)
             if technique_list[technique].get('descr'):
                 # Check if it has two or more sub-techniques if not it is fine if its the first one found
@@ -349,12 +340,11 @@ def get_groups_tour(technique_list):
                     groups['step2'] = [technique, len(technique_list[technique]['subtechniques'])]
                 elif not groups.get('step2'):
                     groups['step2'] = [technique, len(technique_list[technique]['subtechniques'])]
-            # Parent technique does not have relationship with group (Step 3)
-            else:
-                # Check if it has two or more sub-techniques if not it is fine if its the first one found
-                if groups.get('step3') and len(technique_list[technique]['subtechniques']) > 1:
-                    groups['step3'] = [technique_list[technique]['subtechniques'][0].replace(".", "-"), len(technique_list[technique]['subtechniques'])]
-                elif not groups.get('step3'):
-                    groups['step3'] = [technique_list[technique]['subtechniques'][0].replace(".", "-"), len(technique_list[technique]['subtechniques'])]
+            elif groups.get('step3') and len(technique_list[technique]['subtechniques']) > 1:
+                groups['step3'] = [technique_list[technique]['subtechniques'][0].replace(".", "-"), len(technique_list[technique]['subtechniques'])]
+            elif not groups.get('step3'):
+                groups['step3'] = [technique_list[technique]['subtechniques'][0].replace(".", "-"), len(technique_list[technique]['subtechniques'])]
 
+        elif not groups.get('step1'):
+            groups['step1'] = technique
     return groups

@@ -54,10 +54,7 @@ def generate_general_information():
 def generate_training_pages():
     """ Responsible for generating the markdown pages of the training pages """
 
-    data = {}
-    
-    # Side navigation for training
-    data['menu'] = resources_config.training_navigation
+    data = {'menu': resources_config.training_navigation}
 
     # Training Overview
     training_md = resources_config.training_md + json.dumps(data)
@@ -130,7 +127,7 @@ def generate_working_with_attack():
     # Verify if directories exists
     if not os.path.isdir(site_config.web_directory):
         os.makedirs(site_config.web_directory)
-    
+
     docs_dir = os.path.join(site_config.web_directory, 'docs')
     if not os.path.isdir(docs_dir):
         os.makedirs(docs_dir)
